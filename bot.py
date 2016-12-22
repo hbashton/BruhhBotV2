@@ -29,7 +29,8 @@ dispatcher = updater.dispatcher
 def start(bot, update):
     bot.sendChatAction(chat_id=update.message.chat_id,
                        action=ChatAction.TYPING)
-    bot.sendMessage(chat_id=update.message.chat_id, text="Hi. I'm Hunter's Jenkins Bot! You can use me to start builds, assuming your name is @hunter_bruhh! If not, then I'm not much use to you right now! Maybe he'll implement some cool stuff later!")
+    bot.sendMessage(chat_id=update.message.chat_id, 
+                    text="Hi. I'm Hunter's Jenkins Bot! You can use me to start builds, assuming your name is @hunter_bruhh! If not, then I'm not much use to you right now! Maybe he'll implement some cool stuff later!")
     if update.message.from_user.id != int(config['ADMIN']['id']):
         bot.sendChatAction(chat_id=update.message.chat_id,
                            action=ChatAction.TYPING)
@@ -39,92 +40,182 @@ def start(bot, update):
         bot.sendChatAction(chat_id=update.message.chat_id,
                            action=ChatAction.TYPING)
     else:
-        keyboard = [[InlineKeyboardButton("build", callback_data='build')],
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="Sup @hunter_bruhh ! \nHere's a list of commands for you to use\n/build to start the build process\n/changelog 'text' to set the changelog\n/sync to set sync to on/off\n/clean to set clean to on/off\n/start to see this message :)")
+        bot.sendChatAction(chat_id=update.message.chat_id,
+                           action=ChatAction.TYPING)
+                           
+def choosebuild(bot, update):
+    if update.message.from_user.id == int(config['ADMIN']['id']):
+        keyboard = [[InlineKeyboardButton("Without Paramaters", callback_data='build')],
 
-                    [InlineKeyboardButton("buildWithParameters", callback_data='buildWithParameters')]]
+                    [InlineKeyboardButton("With Parameters", callback_data='buildWithParameters')]]
 
         reply_markup = InlineKeyboardMarkup(keyboard)
         update.message.reply_text('Please choose a build style:', reply_markup=reply_markup)
 
-
-#def execute(bot, update, direct=True):
-#
-#    try:
-#        user_id = update.message.from_user.id
-#        command = update.message.text
-#        inline = False
-#    except AttributeError:
-#        # Using inline
-#        user_id = update.inline_query.from_user.id
-#        command = update.inline_query.query
-#        inline = True
-#
-#    if user_id == int(config['ADMIN']['id']):
-#        if not inline:
-#            bot.sendChatAction(chat_id=update.message.chat_id,
-#                               action=ChatAction.TYPING)
-#        output = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-#        output = output.stdout.read().decode('utf-8')
-#        output = '`{0}`'.format(output)
-#
-#        if not inline:
-#            bot.sendMessage(chat_id=update.message.chat_id,
-#                        text=output, parse_mode="Markdown")
-#            return False
-#
-#        if inline:
-#            return output
-
-def changelog(bot, update, args):
+def sync(bot, update):
     if update.message.from_user.id == int(config['ADMIN']['id']):
-        global cg
-        user = update.message.from_user
-        update.message.reply_text('Changelog updated')
-        cgs = '%20'.join(args)
-        cg = cgs
-        print (cg)
-    return cg
+        keyboard = [[InlineKeyboardButton("YES", callback_data='syncon')],
 
-def build(bot, update, direct=True):
+                    [InlineKeyboardButton("NO", callback_data='syncoff')]]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        update.message.reply_text('Would you like to sync on a new build?:', reply_markup=reply_markup)
+        
+def clean(bot, update):
+    if update.message.from_user.id == int(config['ADMIN']['id']):
+        keyboard = [[InlineKeyboardButton("YES", callback_data='cleanon')],
+
+                    [InlineKeyboardButton("NO", callback_data='cleanoff')]]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        update.message.reply_text('Would you like to clean on a new build?:', reply_markup=reply_markup)
+
+def buildwithparams(bot, update, query):
+    query = update.callback_query
+    bot.sendMessage(chat_id=query.message.chat_id,
+                    text="You have selected the 'buildWithParameters option, this will include a custom changelog with your build, and will specify whether to sync & clean or not", 
+                    parse_mode="Markdown")
+    user_id = update.callback_query.from_user.id
+    try:
+        cg
+    except NameError:
+        bot.sendMessage(chat_id=query.message.chat_id,
+                        text="You have selected the 'buildWithParameters option, but the changelog is empty. Please use /changelog + 'text' to provide a changlog for your users.", 
+                        parse_mode="Markdown")
+        return 1
+    try:
+        syncparam
+    except NameError:
+        bot.sendMessage(chat_id=query.message.chat_id,
+                text="You have selected the 'buildWithParameters option, but have not specified whether you would like to sync before building. Please use /sync to do so.", 
+                parse_mode="Markdown")
+        return 1
+    try:
+        cleanparam
+    except NameError:
+        bot.sendMessage(chat_id=query.message.chat_id,
+                text="You have selected the 'buildWithParameters option, but have not specified whether you would like to clean before building. Please use /clean to do so.", 
+                parse_mode="Markdown")
+        return 1
+    if cg:
+        if syncparam:
+            if cleanparam:
+                global changelog
+                changelog = quote_plus('cg')
+                command_string = "https://jenkins.hunterbruhh.me/job/halogenOS/buildWithParameters?token=bruhhrockztheop2buildsbro&changelog=" + cg + "&SYNC=" + syncparam + "&CLEAN=" + cleanparam
+                command = "curl --user hunterbruhh:09131999 " + "'" + command_string + "'"
+                print (command)
+                if user_id == int(config['ADMIN']['id']):
+                    bot.sendChatAction(chat_id=query.message.chat_id,
+                                       action=ChatAction.TYPING)
+                    output = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                    output = output.stdout.read().decode('utf-8')
+                    output = '`{0}`'.format(output)
+                
+                    bot.sendMessage(chat_id=query.message.chat_id,
+                                    text=output, 
+                                    parse_mode="Markdown")
+            else:
+                bot.sendMessage(chat_id=query.message.chat_id,
+                                text="You have selected the 'buildWithParameters option, but have not specified whether you would like to clean before building. Please use /clean to do so.", 
+                                parse_mode="Markdown")
+        else:
+            bot.sendMessage(chat_id=query.message.chat_id,
+                            text="You have selected the 'buildWithParameters option, but have not specified whether you would like to sync before building. Please use /sync to do so.", 
+                            parse_mode="Markdown")
+    else:
+        bot.sendMessage(chat_id=query.message.chat_id,
+                            text="You have selected the 'buildWithParameters option, but the changelog is empty. Please use /changelog + 'text' to provide a changlog for your users.", 
+                            parse_mode="Markdown")
+                            
+                        
+def buildwithoutparams(bot, update, query):
+    user_id = update.callback_query.from_user.id
+    command_string = "https://jenkins.hunterbruhh.me/job/halogenOS/buildWithParameters?token=bruhhrockztheop2buildsbro"
+    command = "curl --user hunterbruhh:09131999 " + "'" + command_string + "'"
+    print (command)
+    if user_id == int(config['ADMIN']['id']):
+        bot.sendChatAction(chat_id=query.message.chat_id,
+                           action=ChatAction.TYPING)
+        output = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        output = output.stdout.read().decode('utf-8')
+        output = '`{0}`'.format(output)
+
+        bot.sendMessage(chat_id=query.message.chat_id,
+                        text=output, parse_mode="Markdown")
+                            
+def changelog(bot, update, args):
+        if update.message.from_user.id == int(config['ADMIN']['id']):
+            global cg
+            user = update.message.from_user
+            
+            str_args = ' '.join(args)
+            if str_args != "":
+                update.message.reply_text('Changelog updated: ' + "'" + str_args + "'")
+                cgs = '%20'.join(args)
+                cg = cgs
+                print ("Changelog set to " + "'" + cg + "'")
+            else:
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text="You cannot provide an empty changelog.", 
+                                parse_mode="Markdown")
+
+def button(bot, update, direct=True):
         user_id = update.callback_query.from_user.id
         if user_id == int(config['ADMIN']['id']):
             query = update.callback_query
 
-            bot.editMessageText(text="Selected option: %s" % query.data,
-                                chat_id=query.message.chat_id,
-                                message_id=query.message.message_id)
             selected_button = query.data
-            changelog = quote_plus('cg')
+            global cleanparam
+            global syncparam
             if selected_button == 'buildWithParameters':
-                bot.sendMessage(chat_id=query.message.chat_id,
-                                text="You have selected the 'buildWithParameters option, this will include a custom changelog with your build. You must provide the changelog with /changelog [text], or this build will fail", parse_mode="Markdown")
-                user_id = update.callback_query.from_user.id
-                command_string = "https://jenkins.hunterbruhh.me/job/halogenOS/buildWithParameters?token=MYTOKENGOESHERE&changelog=" + cg
-                command = "curl --user user:pass " + "'" + command_string + "'"
-                print (command)
-                if user_id == int(config['ADMIN']['id']):
-                     bot.sendChatAction(chat_id=query.message.chat_id,
-                                        action=ChatAction.TYPING)
-                output = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                output = output.stdout.read().decode('utf-8')
-                output = '`{0}`'.format(output)
-    
-                bot.sendMessage(chat_id=query.message.chat_id,
-                                text=output, parse_mode="Markdown")
+                bot.editMessageText(text="Selected option: With Paramaters",
+                                    chat_id=query.message.chat_id,
+                                    message_id=query.message.message_id)
+                buildwithparams(bot, update, query)
             if selected_button == 'build':
-                user_id = update.callback_query.from_user.id
-                command_string = "https://jenkins.hunterbruhh.me/job/halogenOS/buildWithParameters?token=MYTOKENGOESHERE"
-                command = "curl --user user:pass " + "'" + command_string + "'"
-                print (command)
-                if user_id == int(config['ADMIN']['id']):
-                     bot.sendChatAction(chat_id=query.message.chat_id,
-                                        action=ChatAction.TYPING)
-                output = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                output = output.stdout.read().decode('utf-8')
-                output = '`{0}`'.format(output)
-    
+                bot.editMessageText(text="Selected option: Without Paramaters",
+                                    chat_id=query.message.chat_id,
+                                    message_id=query.message.message_id)
+                buildwithoutparams(bot, update, query)
+            if selected_button == 'syncon':
+                bot.editMessageText(text="Selected option: YES",
+                                    chat_id=query.message.chat_id,
+                                    message_id=query.message.message_id)
+                syncparam = "true"
                 bot.sendMessage(chat_id=query.message.chat_id,
-                                text=output, parse_mode="Markdown")
+                                text="Sync set to true", 
+                                parse_mode="Markdown")
+            if selected_button == 'syncoff':
+                bot.editMessageText(text="Selected option: NO",
+                                    chat_id=query.message.chat_id,
+                                    message_id=query.message.message_id)
+                syncparam = "false"
+                bot.sendMessage(chat_id=query.message.chat_id,
+                                text="Sync set to false", 
+                                parse_mode="Markdown")
+            if selected_button == 'cleanon':
+                bot.editMessageText(text="Selected option: YES",
+                                    chat_id=query.message.chat_id,
+                                    message_id=query.message.message_id)
+                cleanparam = "true"
+                bot.sendMessage(chat_id=query.message.chat_id,
+                                text="Clean set to true", 
+                                parse_mode="Markdown")
+            if selected_button == 'cleanoff':
+                bot.editMessageText(text="Selected option: NO",
+                                    chat_id=query.message.chat_id,
+                                    message_id=query.message.message_id)
+                cleanparam = "false"
+                bot.sendMessage(chat_id=query.message.chat_id,
+                                text="Clean set to false", 
+                                parse_mode="Markdown")
+        else:
+                bot.sendMessage(chat_id=query.message.chat_id,
+                                text="You trying to spam me bro?", 
+                                parse_mode="Markdown")
         return False
             
 def inlinequery(bot, update):
@@ -136,22 +227,25 @@ def inlinequery(bot, update):
                                             title=query,
                                             description=o,
                                             input_message_content=InputTextMessageContent(
-                                                '*{0}*\n\n{1}'.format(query, o),
-                                                parse_mode="Markdown")))
+                                            '*{0}*\n\n{1}'.format(query, o),
+                                            parse_mode="Markdown")))
 
     bot.answerInlineQuery(update.inline_query.id, results=results, cache_time=10)
 
 
 start_handler = CommandHandler('start', start)
-build_handler = CommandHandler('build', build)
+sync_handler = CommandHandler('sync', sync)
+clean_handler = CommandHandler('clean', clean)
+build_handler = CommandHandler('build', choosebuild)
 changelog_handler = CommandHandler('changelog', changelog,  pass_args=True)
 
-dispatcher.add_handler(changelog_handler)
 dispatcher.add_handler(start_handler)
-dispatcher.add_handler(CallbackQueryHandler(build))
-dispatcher.add_handler(InlineQueryHandler(inlinequery))
+dispatcher.add_handler(sync_handler)
+dispatcher.add_handler(clean_handler)
+dispatcher.add_handler(build_handler)
 dispatcher.add_handler(changelog_handler)
-
+dispatcher.add_handler(CallbackQueryHandler(button))
+dispatcher.add_handler(InlineQueryHandler(inlinequery))
 dispatcher.add_error_handler(error)
 
 updater.start_polling()
