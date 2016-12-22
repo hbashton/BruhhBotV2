@@ -23,6 +23,12 @@ config = configparser.ConfigParser()
 config.read('bot.ini')
 
 updater = Updater(token=config['KEYS']['bot_api'])
+jenkins = config['JENKINS']['url']
+user = config['JENKINS']['user']
+password = config['JENKINS']['password']
+token = config['JENKINS']['token']
+job = config['JENKINS']['job']
+
 dispatcher = updater.dispatcher
 
 
@@ -41,7 +47,7 @@ def start(bot, update):
                            action=ChatAction.TYPING)
     else:
         bot.sendMessage(chat_id=update.message.chat_id,
-                        text="Sup @hunter_bruhh ! \nHere's a list of commands for you to use\n/build to start the build process\n/changelog 'text' to set the changelog\n/sync to set sync to on/off\n/clean to set clean to on/off\n/start to see this message :)")
+                        text="Sup @hunter_bruhh ! \nHere's a list of commands for you to use\n/build to start the build process\n/changelog 'text' to set the changelog\n/sync to set sync to on/off\n/clean to set clean to on/off\n/repopick 'changes' to pick from gerrit on build\n/repopick to set repopick on or off\n/start to see this message :)")
         bot.sendChatAction(chat_id=update.message.chat_id,
                            action=ChatAction.TYPING)
                            
@@ -99,13 +105,28 @@ def buildwithparams(bot, update, query):
                 text="You have selected the 'buildWithParameters option, but have not specified whether you would like to clean before building. Please use /clean to do so.", 
                 parse_mode="Markdown")
         return 1
+    try:
+        repopickstatus
+    except NameError:
+        bot.sendMessage(chat_id=query.message.chat_id,
+                        text="You have selected the 'buildWithParameters option, but repopick isn't turned on or off. Turn it on or off with /repopick", 
+                        parse_mode="Markdown")
+        return 1
+    if repopickstatus == "true":
+        try:
+            rpick
+        except NameError:
+            bot.sendMessage(chat_id=query.message.chat_id,
+                            text="You have selected the 'buildWithParameters option, repopick is on, but it's empty. Please use /repopick + 'changes' to pick changes from gerrit, or turn repopick off with /repopick", 
+                            parse_mode="Markdown")
+            return 1
     if cg:
         if syncparam:
             if cleanparam:
                 global changelog
                 changelog = quote_plus('cg')
-                command_string = "https://jenkins.hunterbruhh.me/job/halogenOS/buildWithParameters?token=bruhhrockztheop2buildsbro&changelog=" + cg + "&SYNC=" + syncparam + "&CLEAN=" + cleanparam
-                command = "curl --user hunterbruhh:09131999 " + "'" + command_string + "'"
+                command_string = jenkins + "/job/" + job + "/buildWithParameters?token=" + token + "&changelog=" + cg + "&SYNC=" + syncparam + "&CLEAN=" + cleanparam + "&repopicks=" + rpick
+                command = "curl --user " + user + ":" + password + " " + "'" + command_string + "'"
                 print (command)
                 if user_id == int(config['ADMIN']['id']):
                     bot.sendChatAction(chat_id=query.message.chat_id,
@@ -133,8 +154,8 @@ def buildwithparams(bot, update, query):
                         
 def buildwithoutparams(bot, update, query):
     user_id = update.callback_query.from_user.id
-    command_string = "https://jenkins.hunterbruhh.me/job/halogenOS/buildWithParameters?token=bruhhrockztheop2buildsbro"
-    command = "curl --user hunterbruhh:09131999 " + "'" + command_string + "'"
+    command_string = jenkins + "/job/" + job + "/buildWithParameters?token=" + token
+    command = "curl --user " + user + ":" + password + " " + "'" + command_string + "'"
     print (command)
     if user_id == int(config['ADMIN']['id']):
         bot.sendChatAction(chat_id=query.message.chat_id,
@@ -161,6 +182,25 @@ def changelog(bot, update, args):
                 bot.sendMessage(chat_id=update.message.chat_id,
                                 text="You cannot provide an empty changelog.", 
                                 parse_mode="Markdown")
+                                
+def repopick(bot, update, args):
+        if update.message.from_user.id == int(config['ADMIN']['id']):
+            global rpick
+            user = update.message.from_user
+            
+            str_args = ' '.join(args)
+            if str_args != "":
+                update.message.reply_text('I will pick changes: ' + "'" + str_args + "'")
+                rpicks = '%20'.join(args)
+                rpick = rpicks
+                print ("Repopick set to" + "'" + rpick + "'")
+            else:
+                keyboard = [[InlineKeyboardButton("ON", callback_data='repopickon')],
+        
+                            [InlineKeyboardButton("OFF", callback_data='repopickoff')]]
+        
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                update.message.reply_text('Turn repopick ON or OFF:', reply_markup=reply_markup)
 
 def button(bot, update, direct=True):
         user_id = update.callback_query.from_user.id
@@ -170,6 +210,7 @@ def button(bot, update, direct=True):
             selected_button = query.data
             global cleanparam
             global syncparam
+            global repopickstatus
             if selected_button == 'buildWithParameters':
                 bot.editMessageText(text="Selected option: With Paramaters",
                                     chat_id=query.message.chat_id,
@@ -212,6 +253,22 @@ def button(bot, update, direct=True):
                 bot.sendMessage(chat_id=query.message.chat_id,
                                 text="Clean set to false", 
                                 parse_mode="Markdown")
+            if selected_button == 'repopickon':
+                bot.editMessageText(text="Selected option: ON",
+                                    chat_id=query.message.chat_id,
+                                    message_id=query.message.message_id)
+                repopickstatus = "true"
+                bot.sendMessage(chat_id=query.message.chat_id,
+                                text="repopick set to ON", 
+                                parse_mode="Markdown")
+            if selected_button == 'repopickoff':
+                bot.editMessageText(text="Selected option: OFF",
+                                    chat_id=query.message.chat_id,
+                                    message_id=query.message.message_id)
+                repopickstatus = "false"
+                bot.sendMessage(chat_id=query.message.chat_id,
+                                text="repopick set to OFF", 
+                                parse_mode="Markdown")
         else:
                 bot.sendMessage(chat_id=query.message.chat_id,
                                 text="You trying to spam me bro?", 
@@ -237,12 +294,14 @@ start_handler = CommandHandler('start', start)
 sync_handler = CommandHandler('sync', sync)
 clean_handler = CommandHandler('clean', clean)
 build_handler = CommandHandler('build', choosebuild)
+repopick_handler = CommandHandler('repopick', repopick, pass_args=True)
 changelog_handler = CommandHandler('changelog', changelog,  pass_args=True)
 
 dispatcher.add_handler(start_handler)
 dispatcher.add_handler(sync_handler)
 dispatcher.add_handler(clean_handler)
 dispatcher.add_handler(build_handler)
+dispatcher.add_handler(repopick_handler)
 dispatcher.add_handler(changelog_handler)
 dispatcher.add_handler(CallbackQueryHandler(button))
 dispatcher.add_handler(InlineQueryHandler(inlinequery))
