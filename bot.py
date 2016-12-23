@@ -94,9 +94,6 @@ def openchanges(bot, update):
         bot.sendMessage(chat_id=update.message.chat_id,
                         text=cnum,
                         parse_mode="Markdown")
-        print(openc)
-        bot.sendMessage(chat_id=update.message.chat_id,
-                        text=openc)
 
 
 def start(bot, update):
@@ -114,7 +111,7 @@ def start(bot, update):
                            action=ChatAction.TYPING)
     else:
         bot.sendMessage(chat_id=update.message.chat_id,
-                        text="Sup @hunter_bruhh ! \nHere's a list of commands for you to use\n/build to start the build process\n/changelog 'text' to set the changelog\n/sync to set sync to on/off\n/clean to set clean to on/off\n/repopick 'changes' to pick from gerrit on build\n/repopick to set repopick on or off\n/open to see all open changes\n/pickopen to pick all open changes on gerrit\n/start to see this message :)")
+                        text="Sup @hunter_bruhh ! \nHere's a list of commands for you to use\n/build to start the build process\n/changelog 'text' to set the changelog\n/sync to set sync to on/off\n/clean to set clean to on/off\n/repopick " + "`" + "changes"+ "`" + " to pick from gerrit on build\n/repopick to set repopick on or off\n/open to see all open changes\n/pickopen to pick all open changes on gerrit\n/start to see this message :)")
         bot.sendChatAction(chat_id=update.message.chat_id,
                            action=ChatAction.TYPING)
                            
