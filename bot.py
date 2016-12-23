@@ -1,6 +1,9 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
+import requests
 import configparser
+import urllib
+from urllib.request import urlopen
 from urllib.parse import quote_plus
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, InlineQueryHandler, CallbackQueryHandler
 from telegram import InlineQueryResultArticle, ChatAction, InputTextMessageContent, InlineKeyboardButton, InlineKeyboardMarkup
@@ -8,7 +11,9 @@ from uuid import uuid4
 import subprocess
 import time
 import logging
-
+import json
+from json import JSONDecoder
+from functools import partial
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
@@ -28,8 +33,70 @@ user = config['JENKINS']['user']
 password = config['JENKINS']['password']
 token = config['JENKINS']['token']
 job = config['JENKINS']['job']
+gerrituser = config['GERRIT']['user']
+gerriturl = config['GERRIT']['url']
+protocol = config['GERRIT']['protocol']
 
 dispatcher = updater.dispatcher
+
+
+def pickopen(bot, update):
+    if update.message.from_user.id == int(config['ADMIN']['id']):
+        bot.sendChatAction(chat_id=update.message.chat_id,
+                           action=ChatAction.TYPING)
+        curl = "curl -H 'Accept-Type: application/json' " + protocol + "://" + gerrituser + "@" + gerriturl + "/changes/?q=status:open | sed '1d' > open.json"
+        command = subprocess.Popen(curl, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        with open('open.json', encoding='utf-8') as data_file:
+            data = json.load(data_file)
+        dict_length = len(data)
+        for i in range(dict_length):
+            try:
+                cnumbers
+            except NameError:
+                cnumbers = ""
+            cnumbers = cnumbers + " " + str(data[i]['_number'])
+        print(cnumbers)
+        text = "I will pick all open changes: " + cnumbers
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text=text,
+                        parse_mode="Markdown")
+        global rpick
+        cnumbers.replace(" ", "%20")
+        cnumbers_url = cnumbers.replace(" ", "%20")
+        rpick = cnumbers_url
+
+def openchanges(bot, update):
+
+    if update.message.from_user.id == int(config['ADMIN']['id']):
+        bot.sendChatAction(chat_id=update.message.chat_id,
+                           action=ChatAction.TYPING)
+        curl = "curl -H 'Accept-Type: application/json' " + protocol + "://" + gerrituser + "@" + gerriturl + "/changes/?q=status:open | sed '1d' > open.json"
+        command = subprocess.Popen(curl, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        with open('open.json', encoding='utf-8') as data_file:
+            data = json.load(data_file)
+        dict_length = len(data)
+        for i in range(dict_length):
+            try:
+                openc
+            except NameError:
+                openc = ""
+            openc = openc + "\n" + str(data[i]['_number']) + " - " + str(data[i]['subject'])
+        for i in range(dict_length):
+            try:
+                cnum
+            except NameError:
+                cnum = "/repopick"
+            cnum = cnum + " " + str(data[i]['_number'])
+        print(openc)
+        print(cnum)
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text=openc)
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text=cnum,
+                        parse_mode="Markdown")
+        print(openc)
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text=openc)
 
 
 def start(bot, update):
@@ -47,7 +114,7 @@ def start(bot, update):
                            action=ChatAction.TYPING)
     else:
         bot.sendMessage(chat_id=update.message.chat_id,
-                        text="Sup @hunter_bruhh ! \nHere's a list of commands for you to use\n/build to start the build process\n/changelog 'text' to set the changelog\n/sync to set sync to on/off\n/clean to set clean to on/off\n/repopick 'changes' to pick from gerrit on build\n/repopick to set repopick on or off\n/start to see this message :)")
+                        text="Sup @hunter_bruhh ! \nHere's a list of commands for you to use\n/build to start the build process\n/changelog 'text' to set the changelog\n/sync to set sync to on/off\n/clean to set clean to on/off\n/repopick 'changes' to pick from gerrit on build\n/repopick to set repopick on or off\n/open to see all open changes\n/pickopen to pick all open changes on gerrit\n/start to see this message :)")
         bot.sendChatAction(chat_id=update.message.chat_id,
                            action=ChatAction.TYPING)
                            
@@ -289,7 +356,8 @@ def inlinequery(bot, update):
 
     bot.answerInlineQuery(update.inline_query.id, results=results, cache_time=10)
 
-
+open_handler = CommandHandler('open', openchanges)
+pickopen_handler = CommandHandler('pickopen', pickopen)
 start_handler = CommandHandler('start', start)
 sync_handler = CommandHandler('sync', sync)
 clean_handler = CommandHandler('clean', clean)
@@ -297,6 +365,8 @@ build_handler = CommandHandler('build', choosebuild)
 repopick_handler = CommandHandler('repopick', repopick, pass_args=True)
 changelog_handler = CommandHandler('changelog', changelog,  pass_args=True)
 
+dispatcher.add_handler(open_handler)
+dispatcher.add_handler(pickopen_handler)
 dispatcher.add_handler(start_handler)
 dispatcher.add_handler(sync_handler)
 dispatcher.add_handler(clean_handler)
