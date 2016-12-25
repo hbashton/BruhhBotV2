@@ -52,7 +52,7 @@ def start(bot, update):
                                action=ChatAction.TYPING)
             time.sleep(1)
             bot.sendMessage(chat_id=update.message.chat_id,
-                            text="Sup *not* master. \nHere's a list of commands for you to use:\n/open to see all open changes\n/help to see this message :)")
+                            text="Sup *not* master. \nHere's a list of commands for you to use:\n/open to see all open changes\n/link `change numbers` to get a link to gerrit changes\n/help to see this message :)")
             bot.sendChatAction(chat_id=update.message.chat_id,
                                action=ChatAction.TYPING)
         else:
@@ -60,7 +60,7 @@ def start(bot, update):
                                action=ChatAction.TYPING)
             time.sleep(1)
             bot.sendMessage(chat_id=update.message.chat_id,
-                            text="Sup *not* master. \nHere's a list of commands for you to use:\n/open to see all open changes\n/help to see this message :)")
+                            text="Sup *not* master. \nHere's a list of commands for you to use:\n/open to see all open changes\n/link `change numbers` to get a link to gerrit changes\n/help to see this message :)")
             bot.sendChatAction(chat_id=update.message.chat_id,
                                action=ChatAction.TYPING)
     else:
@@ -82,7 +82,7 @@ def help_message(bot, update):
                                action=ChatAction.TYPING)
             time.sleep(1)
             bot.sendMessage(chat_id=update.message.chat_id,
-                            text="Sup *not* master. \nHere's a list of commands for you to use:\n/open to see all open changes\n/help to see this message :)")
+                            text="Sup *not* master. \nHere's a list of commands for you to use:\n/open to see all open changes\n/open `projects` to see open changes for certain projects\n/link `change numbers` to get a link to gerrit changes\n/help to see this message :)")
             bot.sendChatAction(chat_id=update.message.chat_id,
                                action=ChatAction.TYPING)
         else:
@@ -90,13 +90,13 @@ def help_message(bot, update):
                                action=ChatAction.TYPING)
             time.sleep(1)
             bot.sendMessage(chat_id=update.message.chat_id,
-                            text="Sup *not* master. \nHere's a list of commands for you to use:\n/open to see all open changes\n/help to see this message :)")
+                            text="Sup *not* master. \nHere's a list of commands for you to use:\n/open to see all open changes\n/open `projects` to see open changes for certain projects\n/link `change numbers` to get a link to gerrit changes\n/help to see this message :)")
             bot.sendChatAction(chat_id=update.message.chat_id,
                                action=ChatAction.TYPING)
     else:
         if jenkinsconfig == "yes":
             bot.sendMessage(chat_id=update.message.chat_id,
-                            text="Sup @hunter_bruhh ! \nHere's a list of commands for you to use:\n/build to start the build process\n/changelog 'text' to set the changelog\n/sync to set sync to on/off\n/clean to set clean to on/off\n/repopick " + "`" + "changes"+ "`" + " to pick from gerrit on build\n/repopick to set repopick on or off\n/open to see all open changes\n/pickopen to pick all open changes on gerrit\n/help to see this message :)")
+                            text="Sup @hunter_bruhh ! \nHere's a list of commands for you to use:\n/build to start the build process\n/changelog 'text' to set the changelog\n/sync to set sync to on/off\n/clean to set clean to on/off\n/repopick " + "`" + "changes"+ "`" + " to pick from gerrit on build\n/repopick to set repopick on or off\n/open to see all open changes\n/open `projects` to see open changes for certain projects\n/pickopen to pick all open changes on gerrit\n/help to see this message :)")
             bot.sendChatAction(chat_id=update.message.chat_id,
                                action=ChatAction.TYPING)
         else:
@@ -122,8 +122,7 @@ def link(bot, update, args):
                     link = ""
                 link = link + args[i] + " - " + protocol + "://" + gerriturl + "/#/c/" + args[i] + "/" + "\n"
             bot.sendMessage(chat_id=update.message.chat_id,
-                                text=link, 
-                                parse_mode="Markdown")
+                                text=link)
 
 
 def openchanges(bot, update, args):
@@ -136,8 +135,9 @@ def openchanges(bot, update, args):
             data = json.load(data_file)
         dict_length = len(data)
         str_args = ' '.join(args)
+        args_length = len(args)
         if str_args != "":
-            for i in range(args):
+            for i in range(dict_length):
                 try:
                     openc
                 except NameError:
