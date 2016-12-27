@@ -1,4 +1,4 @@
-# JenkinsBot
+# [ReviewBot](https://telegram.me/ReviewBot)
 
 With JenkinsBot, you can run commands on your server from Telegram. *It's fast and simple, but might not be secure*.
 

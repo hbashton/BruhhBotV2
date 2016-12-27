@@ -1,12 +1,15 @@
+
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import os
 import requests
 import configparser
 import urllib
 from urllib.request import urlopen
 from urllib.parse import quote_plus
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, InlineQueryHandler, CallbackQueryHandler
-from telegram import InlineQueryResultArticle, ChatAction, InputTextMessageContent, InlineKeyboardButton, InlineKeyboardMarkup, Chat
+from telegram import InlineQueryResultArticle, ChatAction, InputTextMessageContent, InlineKeyboardButton, InlineKeyboardMarkup, Chat, User, Message, Update, ChatMember, UserProfilePhotos, File, ReplyMarkup, TelegramObject
 from uuid import uuid4
 import subprocess
 import time
@@ -22,7 +25,8 @@ logger = logging.getLogger(__name__)
 
 def error(bot, update, error):
     logger.warn('Update "%s" caused error "%s"' % (update, error))
-
+def __repr__(self):
+    return str(self)
 
 config = configparser.ConfigParser()
 config.read('bot.ini')
@@ -37,9 +41,33 @@ gerrituser = config['GERRIT']['user']
 gerriturl = config['GERRIT']['url']
 protocol = config['GERRIT']['protocol']
 jenkinsconfig = config['JENKINS']['on']
-
+username = config['ADMIN']['username']
 dispatcher = updater.dispatcher
 
+
+hereyago = "Here's a list of commands for you to use:\n"
+build_help = "/build to start the build process\n"
+changelog_help = "/changelog 'text' to set the changelog\n"
+sync_help = "/sync to set sync to on/off\n"
+clean_help = "/clean to set clean to on/off\n"
+repopick_a_help = "/repopick to set repopick on or off\n"
+repopick_b_help = "-- /repopick `changes` to pick from gerrit on build\n"
+open_a_help = "/open to see all open changes\n"
+open_b_help = "-- /open `projects` to see open changes for certain projects\n"
+pickopen_help = "/pickopen to pick all open changes on gerrit\n"
+note_a_help = "/note 'notename' to see the contents of a note\n"
+note_b_help = "-- /note 'notename' 'contents' to set the contents of a note\n"
+note_c_help = "-- /note lock 'notename' to lock a note (admins only)\n"
+help_help = "/help to see this message\n--/help 'command' to see information about that command :)" # love this lmao help_help
+
+jenkinsnotmaster = "Sup *not* master. \n" + hereyago + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + help_help
+nojenkinsnotmaster = "Sup *not* master. \n" + hereyago + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + help_help
+jenkinsmaster = "Sup" + username + "\n" + hereyago + build_help + changelog_help + sync_help + clean_help + repopick_a_help + repopick_b_help + pickopen_help + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + help_help
+nojenkinsmaster = "Sup" + username + "\n" + hereyago + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + help_help
+
+def get_admin_ids(bot, chat_id):
+    """Returns a list of admin IDs for a given chat."""
+    return [admin.user.id for admin in bot.getChatAdministrators(chat_id)]
 
 def start(bot, update):
     if update.message.chat.type == "private":
@@ -54,7 +82,7 @@ def start(bot, update):
                                    action=ChatAction.TYPING)
                 time.sleep(1)
                 bot.sendMessage(chat_id=update.message.chat_id,
-                                text="Sup *not* master. \nHere's a list of commands for you to use:\n/open to see all open changes\n/link `change numbers` to get a link to gerrit changes\n/help to see this message :)")
+                                text=jenkinsnotmaster)
                 bot.sendChatAction(chat_id=update.message.chat_id,
                                    action=ChatAction.TYPING)
             else:
@@ -62,50 +90,174 @@ def start(bot, update):
                                    action=ChatAction.TYPING)
                 time.sleep(1)
                 bot.sendMessage(chat_id=update.message.chat_id,
-                                text="Sup *not* master. \nHere's a list of commands for you to use:\n/open to see all open changes\n/link `change numbers` to get a link to gerrit changes\n/help to see this message :)")
+                                text=nojenkinsnotmaster)
                 bot.sendChatAction(chat_id=update.message.chat_id,
                                    action=ChatAction.TYPING)
         else:
             if jenkinsconfig == "yes":
                 bot.sendMessage(chat_id=update.message.chat_id,
-                                text="Sup @hunter_bruhh ! \nHere's a list of commands for you to use:\n/build to start the build process\n/changelog 'text' to set the changelog\n/sync to set sync to on/off\n/clean to set clean to on/off\n/repopick " + "`" + "changes"+ "`" + " to pick from gerrit on build\n/repopick to set repopick on or off\n/open to see all open changes\n/pickopen to pick all open changes on gerrit\n/help to see this message :)")
+                                text=jenkinsmaster)
                 bot.sendChatAction(chat_id=update.message.chat_id,
                                    action=ChatAction.TYPING)
             else:
                 bot.sendMessage(chat_id=update.message.chat_id,
-                                text="Sup @hunter_bruhh ! \nHere's a list of commands for you to use:\n/open to see all open changes\n/open `projects` to see open changes for certain projects\n/link `change numbers` to get links to changes on gerrit\n/help to see this message :)")
+                                text=nojenkinsmaster)
                 bot.sendChatAction(chat_id=update.message.chat_id,
                                    action=ChatAction.TYPING)
 
-def help_message(bot, update):
+def help_message(bot, update, args):
+    jenkinsmasterlist = ["build", "changelog", "sync", "clean", "repopick", "pickopen", "open", "note"]
+    nojenkinsmasterlist = ["open", "note"]
+    nojenkinslist = ["open", "note"]
+    jenkinslist = ["open", "note"]
+    args_length = len(args)
     if update.message.from_user.id != int(config['ADMIN']['id']):
         if jenkinsconfig == "yes":
-            bot.sendChatAction(chat_id=update.message.chat_id,
+            if args_length != 0:
+                if args_length > 1:
+                    for x in jenkinslist:
+                        try:
+                            helpme
+                        except NameError:
+                            helpmeplox = "Please use only one argument. A list of arguments aka commands to ask about would be:\n"
+                    helpmeplox = helpmeplox + x + ",\n"
+                    helpme = helpmeplox
+                else:
+                    if args[0] in jenkinslist:
+                        if args[0] == "open":
+                            helpme = open_a_help + open_b_help
+                        if args[0] == "note":
+                            helpme = note_a_help + note_b_help + note_c_help
+                    else:
+                        helpme = "That's not a command to ask about."
+                bot.sendChatAction(chat_id=update.message.chat_id,
                                action=ChatAction.TYPING)
-            time.sleep(1)
-            bot.sendMessage(chat_id=update.message.chat_id,
-                            text="Sup *not* master. \nHere's a list of commands for you to use:\n/open to see all open changes\n/open `projects` to see open changes for certain projects\n/link `change numbers` to get a link to gerrit changes\n/help to see this message :)")
-            bot.sendChatAction(chat_id=update.message.chat_id,
-                               action=ChatAction.TYPING)
+                time.sleep(1)
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text=helpme)
+            else:
+                bot.sendChatAction(chat_id=update.message.chat_id,
+                                   action=ChatAction.TYPING)
+                time.sleep(1)
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text=jenkinsnotmaster)
         else:
-            bot.sendChatAction(chat_id=update.message.chat_id,
+            if args_length != 0:
+                if args_length > 1:
+                    for x in nojenkinslist:
+                        try:
+                            helpme
+                        except NameError:
+                            helpmeplox = "Please use only one argument. A list of arguments aka commands to ask about would be:\n"
+                    helpmeplox = helpmeplox + x + ",\n"
+                    helpme = helpmeplox
+                else:
+                    if args[0] in nojenkinslist:
+                        if args[0] == "open":
+                            helpme = open_a_help + open_b_help
+                        if args[0] == "note":
+                            helpme = note_a_help + note_b_help + note_c_help
+                    else:
+                        helpme = "That's not a command to ask about."
+                bot.sendChatAction(chat_id=update.message.chat_id,
                                action=ChatAction.TYPING)
-            time.sleep(1)
-            bot.sendMessage(chat_id=update.message.chat_id,
-                            text="Sup *not* master. \nHere's a list of commands for you to use:\n/open to see all open changes\n/open `projects` to see open changes for certain projects\n/link `change numbers` to get a link to gerrit changes\n/help to see this message :)")
-            bot.sendChatAction(chat_id=update.message.chat_id,
+                time.sleep(1)
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text=helpme)
+                bot.sendChatAction(chat_id=update.message.chat_id,
                                action=ChatAction.TYPING)
+                time.sleep(1)
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text=helpme)
+            else:
+                bot.sendChatAction(chat_id=update.message.chat_id,
+                                   action=ChatAction.TYPING)
+                time.sleep(1)
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text=nojenkinsnotmaster)
     else:
         if jenkinsconfig == "yes":
-            bot.sendMessage(chat_id=update.message.chat_id,
-                            text="Sup @hunter_bruhh ! \nHere's a list of commands for you to use:\n/build to start the build process\n/changelog 'text' to set the changelog\n/sync to set sync to on/off\n/clean to set clean to on/off\n/repopick " + "`" + "changes"+ "`" + " to pick from gerrit on build\n/repopick to set repopick on or off\n/open to see all open changes\n/open `projects` to see open changes for certain projects\n/pickopen to pick all open changes on gerrit\n/help to see this message :)")
-            bot.sendChatAction(chat_id=update.message.chat_id,
+            if args_length != 0:
+                if args_length > 1:
+                    for x in jenkinsmasterlist:
+                        try:
+                            helpme
+                        except NameError:
+                            helpmeplox = "Please use only one argument. A list of arguments aka commands to ask about would be:\n"
+                    helpmeplox = helpmeplox + x + ",\n"
+                    helpme = helpmeplox
+                else:
+                    if args[0] in jenkinsmasterlist:
+                        if args[0] == "build":
+                            helpme = build_help
+                        if args[0] == "changelog":
+                            helpme = changelog_help
+                        if args[0] == "sync":
+                            helpme = sync_help
+                        if args[0] == "clean":
+                            helpme = clean_help
+                        if args[0] == "repopick":
+                            helpme = repopick_a_help + repopick_b_help
+                        if args[0] == "pickopen":
+                            helpme = pickopen_help
+                        if args[0] == "open":
+                            helpme = open_a_help + open_b_help
+                        if args[0] == "note":
+                            helpme = note_a_help + note_b_help + note_c_help
+                    else:
+                        helpme = "That's not a command to ask about."
+                bot.sendChatAction(chat_id=update.message.chat_id,
                                action=ChatAction.TYPING)
+                time.sleep(1)
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text=helpme)
+            else:
+                bot.sendChatAction(chat_id=update.message.chat_id,
+                                   action=ChatAction.TYPING)
+                time.sleep(1)
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text=jenkinsmaster)
         else:
-            bot.sendMessage(chat_id=update.message.chat_id,
-                            text="Sup @hunter_bruhh ! \nHere's a list of commands for you to use:\n/open to see all open changes\n/open `projects` to see open changes for certain projects\n/link `change numbers` to get links to changes on gerrit\n/help to see this message :)")
-            bot.sendChatAction(chat_id=update.message.chat_id,
+            if args_length != 0:
+                if args_length > 1:
+                    for x in nojenkinsmasterlist:
+                        try:
+                            helpme
+                        except NameError:
+                            helpmeplox = "Please use only one argument. A list of arguments aka commands to ask about would be:\n"
+                    helpmeplox = helpmeplox + x + ",\n"
+                    helpme = helpmeplox
+                else:
+                    if args[0] in nojenkinsmasterlist:
+                        if args[0] == "build":
+                            helpme = build_help
+                        if args[0] == "changelog":
+                            helpme = changelog_help
+                        if args[0] == "sync":
+                            helpme = sync_help
+                        if args[0] == "clean":
+                            helpme = clean_help
+                        if args[0] == "repopick":
+                            helpme = repopick_a_help + repopick_b_help
+                        if args[0] == "pickopen":
+                            helpme = pickopen_help
+                        if args[0] == "open":
+                            helpme = open_a_help + open_b_help
+                        if args[0] == "note":
+                            helpme = note_a_help + note_b_help + note_c_help
+                    else:
+                        helpme = "That's not a command to ask about."
+                bot.sendChatAction(chat_id=update.message.chat_id,
                                action=ChatAction.TYPING)
+                time.sleep(1)
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text=helpme)
+            else:
+                bot.sendChatAction(chat_id=update.message.chat_id,
+                                   action=ChatAction.TYPING)
+                time.sleep(1)
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text=nojenkinsmaster)
 
 def link(bot, update, args):
         bot.sendChatAction(chat_id=update.message.chat_id,
@@ -181,6 +333,165 @@ def openchanges(bot, update, args):
             bot.sendMessage(chat_id=update.message.chat_id,
                             text=openc,
                             parse_mode="HTML")
+
+def note(bot, update, args):
+    global notes
+    PATH='./notes.json'
+    if os.path.isfile(PATH) and os.access(PATH, os.R_OK):
+        print("Accessing notes.json")
+    else:
+        print ("Either file is missing or is not readable. Creating.")
+        notes = {}
+        with open("notes.json", 'w') as f:
+            json.dump(notes, f)
+    with open("notes.json") as f:
+        notes = json.load(f)
+    chat_idstr = str(update.message.chat_id)
+    try:
+        notes
+    except NameError:
+        notes = {}
+    try:
+        notes[chat_idstr]
+    except KeyError:
+        notes[chat_idstr] = {}
+    try:
+        notes[chat_idstr]["admin"]
+    except KeyError:
+        notes[chat_idstr]["admin"] = {}
+
+    if len(args) == 0:
+        try:
+            notes[chat_idstr]
+        except KeyError:
+            note = "No notes for this chat"
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text=note)
+            return
+        for i in notes[chat_idstr]:
+            try:
+                note
+            except NameError:
+                note = "Here's a list of notes I have:\n"
+            note = note + i + "\n"
+
+        note = note.replace("admin", "")
+
+        for i in notes[chat_idstr]["admin"]:
+            try:
+                adminnote
+            except NameError:
+                adminnote = "Locked notes:\n"
+            adminnote = adminnote + i + "\n"
+        try:
+            adminnote
+            note = note + adminnote
+        except NameError:
+            note = note
+
+    if len(args) == 1:
+        notename = args[0]
+        if notename == "clearall":
+            if update.message.chat.type != "private":
+                if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
+                    saveme = notes[chat_idstr]["admin"]
+                    del notes[chat_idstr]
+                    notes[chat_idstr] = {}
+                    notes[chat_idstr]["admin"] = {}
+                    notes[chat_idstr]["admin"] = saveme
+                    with open("notes.json", 'w') as f:
+                        json.dump(notes, f)
+                    note = "Notes cleared for " + update.message.chat.title
+                else:
+                    note = "clearall is for admins only chutiya"
+            else:
+                del notes[chat_idstr]
+                note = "Notes cleared for this chat"
+        else:
+            if notename == "clearlock":
+                if update.message.chat.type != "private":
+                    if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
+                        del notes[chat_idstr]["admin"]
+                        note = "Locked notes cleared for this chat"
+                    else:
+                        note = "clearlock is ESPECIALLY for admins only chutiya"
+                else:
+                    note = "clearlock only for groups"
+            else:
+                if notename != "lock":
+                    if notename in notes[chat_idstr]:
+                        note = notename + ":\n" + str(notes[chat_idstr][notename])
+                    else:
+                        if notename in notes[chat_idstr]["admin"]:
+                            note = notename + ":\n" + str(notes[chat_idstr]["admin"][notename])
+                        else:
+                            note = "That note name exist yet! You can create it with\n/note " + notename + " 'content'"
+
+                else:
+                    note = "Use /note lock 'notename' 'content' to lock a note with that content as editable to only admins."
+    if len(args) > 1:
+        origargs = args
+        notename = args[0]
+        del args[0]
+        str_args = ' '.join(args)
+        if update.message.chat.type != "private":
+            if notename == "clear":
+                notename = args[0]
+                if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
+                    if notename in notes[chat_idstr]["admin"]:
+                        del notes[chat_idstr]["admin"][notename]
+                        note = "Cleared the note " + notename
+                    else:
+                        if notename in notes[chat_idstr]:
+                            del notes[chat_idstr][notename]
+                            note = "Cleared the note " + notename
+                        else:
+                            note = notename + "doesn't exist."
+
+            else:
+                if notename == "lock":
+                    if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
+                        lockednote = args[0]
+                        del args[0]
+                        str_args = ' '.join(args)
+                        if lockednote in notes[chat_idstr]:
+                            peasant_paper = notes[chat_idstr][lockednote]
+                            del notes[chat_idstr][lockednote]
+                        if lockednote in notes[chat_idstr]["admin"]:
+                            note = lockednote + " is already locked"
+                        else:
+                            try:
+                                notes[chat_idstr]["admin"][lockednote] = peasant_paper + str_args
+                                note = lockednote + " has been locked. Any note for regular users with the same name has been deleted."
+                            except NameError:
+                                notes[chat_idstr]["admin"][lockednote] = str_args
+                                note = lockednote + " has been locked. Any note for regular users with the same name has been deleted."
+                    else:
+                        note = "Only admins can create locked notes or lock existing notes"
+                else:
+                    if notename in notes[chat_idstr]["admin"]:
+                        if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
+                            notes[chat_idstr]["admin"][notename] = notes[chat_idstr]["admin"][notename] = notes[chat_idstr]["admin"][notename] + "\n" + str_args
+                            note = str_args + " added to note " + notename
+                        else:
+                            note = notename + " is locked. Only admins can edit this note"
+                    else:
+                        try:
+                            notes[chat_idstr][notename] = notes[chat_idstr][notename] + "\n" + str_args
+                            note = str_args + " added to note " + notename
+                        except KeyError:
+                            notes[chat_idstr][notename] = str_args
+                            note = str_args + " added to note " + notename
+    try:
+        note
+    except NameError:
+        note = "something went wrong"
+    bot.sendMessage(chat_id=update.message.chat_id,
+                    text=note)
+    with open("notes.json", 'w') as f:
+        json.dump(notes, f)
+
+
 
 if jenkinsconfig == "yes":
     def pickopen(bot, update):
@@ -456,8 +767,9 @@ if jenkinsconfig == "yes":
 
 start_handler = CommandHandler('start', start)
 open_handler = CommandHandler('open', openchanges, pass_args=True)
-help_handler = CommandHandler('help', help_message)
+help_handler = CommandHandler('help', help_message, pass_args=True)
 link_handler = CommandHandler('link', link, pass_args=True)
+note_handler = CommandHandler('note', note, pass_args=True)
 if jenkinsconfig == "yes":
     dispatcher.add_handler(pickopen_handler)
     dispatcher.add_handler(sync_handler)
@@ -470,6 +782,7 @@ dispatcher.add_handler(start_handler)
 dispatcher.add_handler(open_handler)
 dispatcher.add_handler(help_handler)
 dispatcher.add_handler(link_handler)
+dispatcher.add_handler(note_handler)
 dispatcher.add_handler(CallbackQueryHandler(button))
 dispatcher.add_handler(InlineQueryHandler(inlinequery))
 dispatcher.add_error_handler(error)
