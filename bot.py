@@ -386,10 +386,10 @@ def note(bot, update, args):
             note = note + adminnote
         except NameError:
             note = note
-
+        note = "".join([s for s in note.strip().splitlines(True) if note.strip()])
     if len(args) == 1:
         notename = args[0]
-        commands = ["clearall", "private"]
+        commands = ["clearall", "clearlock"]
         if notename in commands:
             if notename == "clearall":
                 if update.message.chat.type != "private":
@@ -434,52 +434,91 @@ def note(bot, update, args):
         notename = args[0]
         del args[0]
         str_args = ' '.join(args)
-        commands = ["clear", "lock" ]
+        commands = ["clear", "lock", "unlock" ]
         if notename in commands:
+            command = notename
+
             if notename == "clear":
                 if update.message.chat.type != "private":
                     notename = args[0]
-                    if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
-                        if notename in notes[chat_idstr]["admin"]:
-                            del notes[chat_idstr]["admin"][notename]
-                            note = "Cleared the note " + notename
-                        else:
-                            if notename in notes[chat_idstr]:
-                                del notes[chat_idstr][notename]
+
+                    if notename in commands:
+                        note = "Notes cannot be command names."
+                    else:
+                        if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
+                            if notename in notes[chat_idstr]["admin"]:
+                                del notes[chat_idstr]["admin"][notename]
                                 note = "Cleared the note " + notename
                             else:
-                                note = notename + "doesn't exist."
+                                if notename in notes[chat_idstr]:
+                                    del notes[chat_idstr][notename]
+                                    note = "Cleared the note " + notename
+                                else:
+                                    note = notename + " doesn't exist."
+                        else:
+                            note = "Only admins can clear notes!"
                 else:
                     notename = args[0]
-                    if notename in notes[chat_idstr]:
-                        del notes[chat_idstr][notename]
-                        note = "Cleared the note " + notename
+                    if notename in commands:
+                        note = "Notes cannot be command names."
                     else:
-                        note = notename + "doesn't exist."
+                        if notename in notes[chat_idstr]:
+                            del notes[chat_idstr][notename]
+                            note = "Cleared the note " + notename
+                        else:
+                            note = notename + " doesn't exist."
         
             if notename == "lock":
                 if update.message.chat.type != "private":
+                    notename = args[0]
 
-                    if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
-                        lockednote = args[0]
-                        del args[0]
-                        str_args = ' '.join(args)
-                        if lockednote in notes[chat_idstr]:
-                            peasant_paper = notes[chat_idstr][lockednote]
-                            del notes[chat_idstr][lockednote]
-                        if lockednote in notes[chat_idstr]["admin"]:
-                            note = lockednote + " is already locked"
+                    if notename in commands:
+                        note = "Notes cannot be command names."
+                    else:                    
+                        if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
+                            lockednote = args[0]
+                            del args[0]
+                            str_args = ' '.join(args)
+                            if lockednote in notes[chat_idstr]:
+                                peasant_paper = notes[chat_idstr][lockednote]
+                                del notes[chat_idstr][lockednote]
+                            if lockednote in notes[chat_idstr]["admin"]:
+                                note = lockednote + " is already locked"
+                            else:
+                                try:
+                                    notes[chat_idstr]["admin"][lockednote] = peasant_paper + str_args
+                                    note = lockednote + " has been locked. Any note for regular users with the same name has been deleted."
+                                except NameError:
+                                    notes[chat_idstr]["admin"][lockednote] = str_args
+                                    note = lockednote + " has been locked. Any note for regular users with the same name has been deleted."
                         else:
-                            try:
-                                notes[chat_idstr]["admin"][lockednote] = peasant_paper + str_args
-                                note = lockednote + " has been locked. Any note for regular users with the same name has been deleted."
-                            except NameError:
-                                notes[chat_idstr]["admin"][lockednote] = str_args
-                                note = lockednote + " has been locked. Any note for regular users with the same name has been deleted."
-                    else:
-                        note = "Only admins can create locked notes or lock existing notes"
+                            note = "Only admins can create locked notes or lock existing notes"
                 else:
                     note = "locking notes is only for groups"
+            if notename == "unlock":
+                if update.message.chat.type != "private":
+                    notename = args[0]
+
+                    if notename in commands:
+                        note = "Notes cannot be command names."
+                    else:                    
+                        if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
+                            lockednote = args[0]
+                            del args[0]
+                            if lockednote in notes[chat_idstr]:
+                                note = lockednote + " is already unlocked"
+                            else:
+                                if lockednote in notes[chat_idstr]["admin"]:
+                                    peasant_paper = notes[chat_idstr]["admin"][lockednote]
+                                    del notes[chat_idstr]["admin"][lockednote]
+                                    notes[chat_idstr][lockednote] = peasant_paper
+                                    note = lockednote + " has been unlocked."
+                                else:
+                                    note = lockednote + " is not a locked note"                                             
+                        else:
+                            note = "Only admins can unlock notes"
+                else:
+                    note = "unlocking notes is only for groups"
         else:
             if notename in notes[chat_idstr]["admin"]:
                 if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
