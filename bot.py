@@ -58,12 +58,16 @@ pickopen_help = "/pickopen to pick all open changes on gerrit\n"
 note_a_help = "/note 'notename' to see the contents of a note\n"
 note_b_help = "-- /note 'notename' 'contents' to set the contents of a note\n"
 note_c_help = "-- /note lock 'notename' to lock a note (admins only)\n"
+note_d_help = "-- /note unlock 'notename' to unlock a note (admins only)\n"
+note_e_help = "-- /note clear 'notename' to clear a note (admins only)\n"
+note_f_help = "-- /note clearall to clear all normal notes (admins only)\n"
+note_g_help = "-- /note clearlock to clear all locked notes (admins only)\n"
 help_help = "/help to see this message\n--/help 'command' to see information about that command :)" # love this lmao help_help
 
-jenkinsnotmaster = "Sup *not* master. \n" + hereyago + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + help_help
-nojenkinsnotmaster = "Sup *not* master. \n" + hereyago + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + help_help
-jenkinsmaster = "Sup" + username + "\n" + hereyago + build_help + changelog_help + sync_help + clean_help + repopick_a_help + repopick_b_help + pickopen_help + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + help_help
-nojenkinsmaster = "Sup" + username + "\n" + hereyago + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + help_help
+jenkinsnotmaster = "Sup *not* master. \n" + hereyago + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + help_help
+nojenkinsnotmaster = "Sup *not* master. \n" + hereyago + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + help_help
+jenkinsmaster = "Sup" + username + "\n" + hereyago + build_help + changelog_help + sync_help + clean_help + repopick_a_help + repopick_b_help + pickopen_help + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + help_help
+nojenkinsmaster = "Sup" + username + "\n" + hereyago + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + help_help
 
 def get_admin_ids(bot, chat_id):
     """Returns a list of admin IDs for a given chat."""
@@ -127,7 +131,7 @@ def help_message(bot, update, args):
                         if args[0] == "open":
                             helpme = open_a_help + open_b_help
                         if args[0] == "note":
-                            helpme = note_a_help + note_b_help + note_c_help
+                            helpme = note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help
                     else:
                         helpme = "That's not a command to ask about."
                 bot.sendChatAction(chat_id=update.message.chat_id,
@@ -156,7 +160,7 @@ def help_message(bot, update, args):
                         if args[0] == "open":
                             helpme = open_a_help + open_b_help
                         if args[0] == "note":
-                            helpme = note_a_help + note_b_help + note_c_help
+                            helpme = note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help
                     else:
                         helpme = "That's not a command to ask about."
                 bot.sendChatAction(chat_id=update.message.chat_id,
@@ -203,7 +207,7 @@ def help_message(bot, update, args):
                         if args[0] == "open":
                             helpme = open_a_help + open_b_help
                         if args[0] == "note":
-                            helpme = note_a_help + note_b_help + note_c_help
+                            helpme = note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help
                     else:
                         helpme = "That's not a command to ask about."
                 bot.sendChatAction(chat_id=update.message.chat_id,
@@ -244,7 +248,7 @@ def help_message(bot, update, args):
                         if args[0] == "open":
                             helpme = open_a_help + open_b_help
                         if args[0] == "note":
-                            helpme = note_a_help + note_b_help + note_c_help
+                            helpme = note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help
                     else:
                         helpme = "That's not a command to ask about."
                 bot.sendChatAction(chat_id=update.message.chat_id,
