@@ -337,9 +337,7 @@ def openchanges(bot, update, args):
 def note(bot, update, args):
     global notes
     PATH='./notes.json'
-    if os.path.isfile(PATH) and os.access(PATH, os.R_OK):
-        print("Accessing notes.json")
-    else:
+    if not os.path.isfile(PATH) or not os.access(PATH, os.R_OK):
         print ("Either file is missing or is not readable. Creating.")
         notes = {}
         with open("notes.json", 'w') as f:
@@ -391,23 +389,25 @@ def note(bot, update, args):
 
     if len(args) == 1:
         notename = args[0]
-        if notename == "clearall":
-            if update.message.chat.type != "private":
-                if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
-                    saveme = notes[chat_idstr]["admin"]
-                    del notes[chat_idstr]
-                    notes[chat_idstr] = {}
-                    notes[chat_idstr]["admin"] = {}
-                    notes[chat_idstr]["admin"] = saveme
-                    with open("notes.json", 'w') as f:
-                        json.dump(notes, f)
-                    note = "Notes cleared for " + update.message.chat.title
+        commands = ["clearall", "private"]
+        if notename in commands:
+            if notename == "clearall":
+                if update.message.chat.type != "private":
+                    if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
+                        saveme = notes[chat_idstr]["admin"]
+                        del notes[chat_idstr]
+                        notes[chat_idstr] = {}
+                        notes[chat_idstr]["admin"] = {}
+                        notes[chat_idstr]["admin"] = saveme
+                        with open("notes.json", 'w') as f:
+                            json.dump(notes, f)
+                        note = "Notes cleared for " + update.message.chat.title
+                    else:
+                        note = "clearall is for admins only chutiya"
                 else:
-                    note = "clearall is for admins only chutiya"
-            else:
-                del notes[chat_idstr]
-                note = "Notes cleared for this chat"
-        else:
+                    del notes[chat_idstr]
+                    note = "Notes cleared for this chat"
+                    
             if notename == "clearlock":
                 if update.message.chat.type != "private":
                     if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
@@ -417,39 +417,49 @@ def note(bot, update, args):
                         note = "clearlock is ESPECIALLY for admins only chutiya"
                 else:
                     note = "clearlock only for groups"
-            else:
-                if notename != "lock":
-                    if notename in notes[chat_idstr]:
-                        note = notename + ":\n" + str(notes[chat_idstr][notename])
-                    else:
-                        if notename in notes[chat_idstr]["admin"]:
-                            note = notename + ":\n" + str(notes[chat_idstr]["admin"][notename])
-                        else:
-                            note = "That note name exist yet! You can create it with\n/note " + notename + " 'content'"
-
+        else:
+            if notename != "lock":
+                if notename in notes[chat_idstr]:
+                    note = notename + ":\n" + str(notes[chat_idstr][notename])
                 else:
-                    note = "Use /note lock 'notename' 'content' to lock a note with that content as editable to only admins."
+                    if notename in notes[chat_idstr]["admin"]:
+                        note = notename + ":\n" + str(notes[chat_idstr]["admin"][notename])
+                    else:
+                        note = "That note name exist yet! You can create it with\n/note " + notename + " 'content'"
+
+            else:
+                note = "Use /note lock 'notename' 'content' to lock a note with that content as editable to only admins."
     if len(args) > 1:
         origargs = args
         notename = args[0]
         del args[0]
         str_args = ' '.join(args)
-        if update.message.chat.type != "private":
+        commands = ["clear", "lock" ]
+        if notename in commands:
             if notename == "clear":
-                notename = args[0]
-                if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
-                    if notename in notes[chat_idstr]["admin"]:
-                        del notes[chat_idstr]["admin"][notename]
-                        note = "Cleared the note " + notename
-                    else:
-                        if notename in notes[chat_idstr]:
-                            del notes[chat_idstr][notename]
+                if update.message.chat.type != "private":
+                    notename = args[0]
+                    if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
+                        if notename in notes[chat_idstr]["admin"]:
+                            del notes[chat_idstr]["admin"][notename]
                             note = "Cleared the note " + notename
                         else:
-                            note = notename + "doesn't exist."
+                            if notename in notes[chat_idstr]:
+                                del notes[chat_idstr][notename]
+                                note = "Cleared the note " + notename
+                            else:
+                                note = notename + "doesn't exist."
+                else:
+                    notename = args[0]
+                    if notename in notes[chat_idstr]:
+                        del notes[chat_idstr][notename]
+                        note = "Cleared the note " + notename
+                    else:
+                        note = notename + "doesn't exist."
+        
+            if notename == "lock":
+                if update.message.chat.type != "private":
 
-            else:
-                if notename == "lock":
                     if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
                         lockednote = args[0]
                         del args[0]
@@ -469,19 +479,21 @@ def note(bot, update, args):
                     else:
                         note = "Only admins can create locked notes or lock existing notes"
                 else:
-                    if notename in notes[chat_idstr]["admin"]:
-                        if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
-                            notes[chat_idstr]["admin"][notename] = notes[chat_idstr]["admin"][notename] = notes[chat_idstr]["admin"][notename] + "\n" + str_args
-                            note = str_args + " added to note " + notename
-                        else:
-                            note = notename + " is locked. Only admins can edit this note"
-                    else:
-                        try:
-                            notes[chat_idstr][notename] = notes[chat_idstr][notename] + "\n" + str_args
-                            note = str_args + " added to note " + notename
-                        except KeyError:
-                            notes[chat_idstr][notename] = str_args
-                            note = str_args + " added to note " + notename
+                    note = "locking notes is only for groups"
+        else:
+            if notename in notes[chat_idstr]["admin"]:
+                if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
+                    notes[chat_idstr]["admin"][notename] = notes[chat_idstr]["admin"][notename] = notes[chat_idstr]["admin"][notename] + "\n" + str_args
+                    note = str_args + " added to note " + notename
+                else:
+                    note = notename + " is locked. Only admins can edit this note"
+            else:
+                try:
+                    notes[chat_idstr][notename] = notes[chat_idstr][notename] + "\n" + str_args
+                    note = str_args + " added to note " + notename
+                except KeyError:
+                    notes[chat_idstr][notename] = str_args
+                    note = str_args + " added to note " + notename
     try:
         note
     except NameError:
