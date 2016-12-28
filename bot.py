@@ -42,7 +42,8 @@ gerrituser = config['GERRIT']['user']
 gerriturl = config['GERRIT']['url']
 protocol = config['GERRIT']['protocol']
 jenkinsconfig = config['JENKINS']['on']
-username = config['ADMIN']['username']
+myusername = config['ADMIN']['username']
+
 dispatcher = updater.dispatcher
 
 
@@ -67,8 +68,8 @@ help_help = "/help to see this message\n--/help 'command' to see information abo
 
 jenkinsnotmaster = "Sup *not* master. \n" + hereyago + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + help_help
 nojenkinsnotmaster = "Sup *not* master. \n" + hereyago + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + help_help
-jenkinsmaster = "Sup" + username + "\n" + hereyago + build_help + changelog_help + sync_help + clean_help + repopick_a_help + repopick_b_help + pickopen_help + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + help_help
-nojenkinsmaster = "Sup" + username + "\n" + hereyago + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + help_help
+jenkinsmaster = "Sup" + myusername + "\n" + hereyago + build_help + changelog_help + sync_help + clean_help + repopick_a_help + repopick_b_help + pickopen_help + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + help_help
+nojenkinsmaster = "Sup" + myusername + "\n" + hereyago + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + help_help
 
 # global functions
 def latlong(area):
@@ -90,7 +91,79 @@ def latlong(area):
 def get_admin_ids(bot, chat_id):
     """Returns a list of admin IDs for a given chat."""
     return [admin.user.id for admin in bot.getChatAdministrators(chat_id)]
+    
+def get_user_info(bot, chat_id, user_id, find):
+    return bot.getChatMember(chat_id, user_id)["user"][find]
 
+def get_chat_info(bot, chat_id):
+    return bot.getChat(chat_id)
+    
+def receiveMessage(bot, update):
+    tguser = str(update.message.from_user.username)
+    tgid = str(update.message.from_user.id)
+    chat_idstr = str(update.message.chat_id)
+
+    global idbase
+    
+    PATH='./idbase.json'
+    
+    if not os.path.isfile(PATH) or not os.access(PATH, os.R_OK):
+        print ("Either file is missing or is not readable. Creating.")
+        idbase = {}
+        with open("idbase.json", 'w') as f:
+            json.dump(idbase, f)
+    with open("idbase.json") as f:
+        idbase = json.load(f)
+    if chat_idstr not in idbase:
+        idbase[chat_idstr] = {}
+    if tgid not in idbase[chat_idstr].keys():
+        idbase[chat_idstr][tgid] = tguser
+        
+    if update.message.new_chat_member:
+        tguser = str(update.message.new_chat_member["username"])
+        tgid = str(update.message.new_chat_member["id"])
+        if chat_idstr not in idbase:
+            idbase[chat_idstr] = {}
+        if tgid not in idbase[chat_idstr].keys():
+            idbase[chat_idstr][tgid] = tguser
+            
+    if update.message.left_chat_member:
+        tguser = str(update.message.left_chat_member["username"])
+        tgid = str(update.message.left_chat_member["id"])
+        if chat_idstr not in idbase:
+            idbase[chat_idstr] = {}
+        if tgid not in idbase[chat_idstr].keys():
+            idbase[chat_idstr][tgid] = tguser
+
+    with open("idbase.json", 'w') as f:
+        json.dump(idbase, f)
+
+def kick_user(bot, update, args):
+    chat_id = update.message.chat_id
+    chat_idstr = str(update.message.chat_id)
+    global idbase
+    with open("idbase.json") as f:
+        idbase = json.load(f)
+        
+    str_args = ' '.join(args)
+    if "@" in str_args:
+        banuser = str_args.replace("@", "")
+        for tg_id, tg_user in idbase[chat_idstr].items():
+            if tg_user == banuser:
+                user_id = tg_id
+        if not user_id:
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text="I don't know anyone by that name!")
+        else:
+            bot.kickChatMember(chat_id, user_id)
+            
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text="User @" + banuser + " removed from " + update.message.chat.title + " :(")
+    else:
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="You can kick someone with /kick @username")
+    with open("idbase.json", 'w') as f:
+        json.dump(idbase, f)
 
 # bot functions
 def start(bot, update):
@@ -872,6 +945,7 @@ help_handler = CommandHandler('help', help_message, pass_args=True)
 link_handler = CommandHandler('link', link, pass_args=True)
 note_handler = CommandHandler('note', note, pass_args=True)
 time_handler = CommandHandler('time', time_command, pass_args=True)
+kick_handler = CommandHandler('kick', kick_user, pass_args=True)
 
 if jenkinsconfig == "yes":
     dispatcher.add_handler(pickopen_handler)
@@ -887,6 +961,8 @@ dispatcher.add_handler(help_handler)
 dispatcher.add_handler(link_handler)
 dispatcher.add_handler(note_handler)
 dispatcher.add_handler(time_handler)
+dispatcher.add_handler(kick_handler)
+dispatcher.add_handler(MessageHandler([Filters.all], receiveMessage))
 dispatcher.add_handler(CallbackQueryHandler(button))
 dispatcher.add_handler(InlineQueryHandler(inlinequery))
 dispatcher.add_error_handler(error)
