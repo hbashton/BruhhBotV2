@@ -1,22 +1,23 @@
-
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
+import configparser
+import json
+import logging
 import os
 import requests
-import configparser
-import urllib
-from urllib.request import urlopen
-from urllib.parse import quote_plus
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, InlineQueryHandler, CallbackQueryHandler
-from telegram import InlineQueryResultArticle, ChatAction, InputTextMessageContent, InlineKeyboardButton, InlineKeyboardMarkup, Chat, User, Message, Update, ChatMember, UserProfilePhotos, File, ReplyMarkup, TelegramObject
-from uuid import uuid4
 import subprocess
 import time
-import logging
-import json
-from json import JSONDecoder
+import urllib
+from datetime import datetime
 from functools import partial
+from json import JSONDecoder
+from pytz import timezone
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, InlineQueryHandler, CallbackQueryHandler
+from telegram import InlineQueryResultArticle, ChatAction, InputTextMessageContent, InlineKeyboardButton, InlineKeyboardMarkup, Chat, User, Message, Update, ChatMember, UserProfilePhotos, File, ReplyMarkup, TelegramObject
+from urllib.request import urlopen
+from urllib.parse import quote_plus, urlencode
+from uuid import uuid4
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
@@ -69,10 +70,29 @@ nojenkinsnotmaster = "Sup *not* master. \n" + hereyago + open_a_help + open_b_he
 jenkinsmaster = "Sup" + username + "\n" + hereyago + build_help + changelog_help + sync_help + clean_help + repopick_a_help + repopick_b_help + pickopen_help + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + help_help
 nojenkinsmaster = "Sup" + username + "\n" + hereyago + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + help_help
 
+# global functions
+def latlong(area):
+    response = requests.get("https://maps.googleapis.com/maps/api/geocode/json?address=" + area.replace(" ", "%20"))
+    status = response.status_code
+    print(status)
+    resp_json_payload = response.json()
+
+    if status != 200:
+        return "fail", "fail"
+    else:
+        if resp_json_payload['status'] == "ZERO_RESULTS":
+            return "fail", "fail"
+        else:
+            latitude = resp_json_payload['results'][0]['geometry']['location']['lat']
+            longitude = resp_json_payload['results'][0]['geometry']['location']['lng']
+            return latitude,longitude
+
 def get_admin_ids(bot, chat_id):
     """Returns a list of admin IDs for a given chat."""
     return [admin.user.id for admin in bot.getChatAdministrators(chat_id)]
 
+
+# bot functions
 def start(bot, update):
     if update.message.chat.type == "private":
 
@@ -546,7 +566,33 @@ def note(bot, update, args):
     with open("notes.json", 'w') as f:
         json.dump(notes, f)
 
-
+def time_command(bot, update, args):
+    str_args = ' '.join(args)
+    latitude, longitude = latlong(str_args)
+    timestamp = time.time()
+    if latitude != "fail" and longitude != "fail":
+        api_response = requests.get('https://maps.googleapis.com/maps/api/timezone/json?location={0},{1}&timestamp={2}'.format(latitude,longitude,timestamp))
+        api_response_dict = api_response.json()
+    
+        if api_response_dict['status'] == 'OK':
+            timezone_id = api_response_dict['timeZoneId']
+            dt_timezone = timezone(timezone_id)
+            dt_time = datetime.now(dt_timezone)
+            dt_time = "The local time in " + str(dt_timezone) + " is: " + dt_time.strftime("%A, %d %B - %H:%M:%S")
+            dt_time = dt_time.replace("_", " ")
+        if api_response_dict['status'] == 'ZERO_RESULTS':
+            dt_time = "It seems that in " + str_args + " they do not have a concept of time"
+    else:
+        dt_time = "It seems that in " + '"' + str_args + '"' + " they do not have a concept of time"
+    try:
+        dt_time
+    except NameError:
+        dt_time = "something went wrong"
+    bot.sendMessage(chat_id=update.message.chat_id,
+                    text=dt_time)
+    print(dt_time)
+    return(dt_time)
+    
 
 if jenkinsconfig == "yes":
     def pickopen(bot, update):
@@ -825,6 +871,8 @@ open_handler = CommandHandler('open', openchanges, pass_args=True)
 help_handler = CommandHandler('help', help_message, pass_args=True)
 link_handler = CommandHandler('link', link, pass_args=True)
 note_handler = CommandHandler('note', note, pass_args=True)
+time_handler = CommandHandler('time', time_command, pass_args=True)
+
 if jenkinsconfig == "yes":
     dispatcher.add_handler(pickopen_handler)
     dispatcher.add_handler(sync_handler)
@@ -838,6 +886,7 @@ dispatcher.add_handler(open_handler)
 dispatcher.add_handler(help_handler)
 dispatcher.add_handler(link_handler)
 dispatcher.add_handler(note_handler)
+dispatcher.add_handler(time_handler)
 dispatcher.add_handler(CallbackQueryHandler(button))
 dispatcher.add_handler(InlineQueryHandler(inlinequery))
 dispatcher.add_error_handler(error)
