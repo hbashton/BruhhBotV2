@@ -1,15 +1,17 @@
 [KEYS]
-bot_api = somelongshithere
+bot_api = somelongshithere # required
 [ADMIN]
-id = 1234567
+id = 1234567 # required
+username = @your_telegram_username # required
 [JENKINS]
-on = "please put yes or no here"
+on = please put yes or no here (no by default) # required
 url = jenkins url
 user = jenkins username
 password = jenkins password
 token = token
 job = job
 [GERRIT]
+on = please put yes or no here (no by default) # required
 url = gerrit url
 user = gerrituser
 protocol = http or https

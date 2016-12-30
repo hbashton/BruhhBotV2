@@ -12,6 +12,7 @@ import urllib
 from datetime import datetime
 from functools import partial
 from json import JSONDecoder
+from langdetect import detect
 from pytz import timezone
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, InlineQueryHandler, CallbackQueryHandler
 from telegram import InlineQueryResultArticle, ChatAction, InputTextMessageContent, InlineKeyboardButton, InlineKeyboardMarkup, Chat, User, Message, Update, ChatMember, UserProfilePhotos, File, ReplyMarkup, TelegramObject
@@ -33,45 +34,43 @@ config = configparser.ConfigParser()
 config.read('bot.ini')
 
 updater = Updater(token=config['KEYS']['bot_api'])
-jenkins = config['JENKINS']['url']
-user = config['JENKINS']['user']
-password = config['JENKINS']['password']
-token = config['JENKINS']['token']
-job = config['JENKINS']['job']
-gerrituser = config['GERRIT']['user']
-gerriturl = config['GERRIT']['url']
-protocol = config['GERRIT']['protocol']
-jenkinsconfig = config['JENKINS']['on']
 myusername = config['ADMIN']['username']
-
 dispatcher = updater.dispatcher
 
 
 hereyago = "Here's a list of commands for you to use:\n"
-build_help = "/build to start the build process\n"
-changelog_help = "/changelog 'text' to set the changelog\n"
-sync_help = "/sync to set sync to on/off\n"
-clean_help = "/clean to set clean to on/off\n"
-repopick_a_help = "/repopick to set repopick on or off\n"
-repopick_b_help = "-- /repopick `changes` to pick from gerrit on build\n"
-open_a_help = "/open to see all open changes\n"
-open_b_help = "-- /open `projects` to see open changes for certain projects\n"
-pickopen_help = "/pickopen to pick all open changes on gerrit\n"
-note_a_help = "/note 'notename' to see the contents of a note\n"
+add_help = "/add to let me moderate a group\n"
+rem_help = "/rem to stop me from moderating a group any longer\n"
+note_a_help = "\n/note 'notename' to see the contents of a note\n"
 note_b_help = "-- /note 'notename' 'contents' to set the contents of a note\n"
 note_c_help = "-- /note lock 'notename' to lock a note (admins only)\n"
 note_d_help = "-- /note unlock 'notename' to unlock a note (admins only)\n"
 note_e_help = "-- /note clear 'notename' to clear a note (admins only)\n"
 note_f_help = "-- /note clearall to clear all normal notes (admins only)\n"
 note_g_help = "-- /note clearlock to clear all locked notes (admins only)\n"
-help_help = "/help to see this message\n--/help 'command' to see information about that command :)" # love this lmao help_help
+kick_help = "/kick @username to kick a user from this chat. They will not be able to join unless added\n"
+ban_help = "/ban @username to ban a user from this chat. They will not be able to join unless unbanned\n"
+unban_help = "/unban @username to unban a user from this chat. They can join, but will not automatically be added\n"
+banall_help = "/banall @username to ban a user from all chats I have on record. This can only be used by the owner of this bot.\n"
+unbanall_help = "/unbanall @username to unban a user from all chats I have on record. Only my owner can use this command.\n*This is the only way to undo banall*\n"
+promote_help = "/promote @username to give a user the power of a mod\n"
+demote_help = "/demote @username to remove mod priveleges from a user\n"
+modlist_help = "/modlist to see a list of moderators for this chat!\n"
+time_help = "\n/time 'location'  to get the current time and date in that location\n"
+help_help = "\n/help to see this message\n--/help 'command' to see information about that command :)"
+save_help = "\n/save 'name' 'message' to save a message\n"
+get_help = "/get 'name' to retrieve a saved message\n"
+lock_help = "\n/lock 'setting' to lock group setings\n"
+unlock_help = "/unlock 'setting' to unlock group settings\n"
+setflood_help = "/setflood 'int' to set the number before a user is kicked (must be between 5 and 10) \n"
+settings_help = "\n/settings to see the current group settings\n"
+get_help = "/get 'name' to retrieve a saved message\n"
 
-jenkinsnotmaster = "Sup *not* master. \n" + hereyago + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + help_help
-nojenkinsnotmaster = "Sup *not* master. \n" + hereyago + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + help_help
-jenkinsmaster = "Sup" + myusername + "\n" + hereyago + build_help + changelog_help + sync_help + clean_help + repopick_a_help + repopick_b_help + pickopen_help + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + help_help
-nojenkinsmaster = "Sup" + myusername + "\n" + hereyago + open_a_help + open_b_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + help_help
-
+standardhelp = add_help + rem_help + promote_help + demote_help + modlist_help + kick_help + ban_help + unban_help + banall_help + unbanall_help + lock_help + unlock_help + setflood_help + settings_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + time_help + save_help + get_help
+notmaster = "Sup *not* master. \n"
+master = "Sup" + myusername + "\n"
 # global functions
+
 def latlong(area):
     response = requests.get("https://maps.googleapis.com/maps/api/geocode/json?address=" + area.replace(" ", "%20"))
     status = response.status_code
@@ -92,356 +91,759 @@ def get_admin_ids(bot, chat_id):
     """Returns a list of admin IDs for a given chat."""
     return [admin.user.id for admin in bot.getChatAdministrators(chat_id)]
     
-def get_user_info(bot, chat_id, user_id, find):
-    return bot.getChatMember(chat_id, user_id)["user"][find]
-
+def get_user_info(bot, chat_id, user_id, find1, find2):
+    if find1:
+        return bot.getChatMember(chat_id, user_id)[find1][find2]
+    else:
+        return bot.getChatMember(chat_id, user_id)[find2]
 def get_chat_info(bot, chat_id):
     return bot.getChat(chat_id)
     
-def receiveMessage(bot, update):
-    tguser = str(update.message.from_user.username)
-    tgid = str(update.message.from_user.id)
+def common_vars(bot, update):
     chat_idstr = str(update.message.chat_id)
-
-    global idbase
+    chat_id = update.message.chat_id
+    fromid = update.message.from_user.id
+    fromidstr = str(update.message.from_user.id)
+    return chat_idstr, chat_id, fromid, fromidstr
     
-    PATH='./idbase.json'
-    
+def loadjson(PATH, filename):
     if not os.path.isfile(PATH) or not os.access(PATH, os.R_OK):
         print ("Either file is missing or is not readable. Creating.")
-        idbase = {}
-        with open("idbase.json", 'w') as f:
-            json.dump(idbase, f)
-    with open("idbase.json") as f:
-        idbase = json.load(f)
-    if chat_idstr not in idbase:
-        idbase[chat_idstr] = {}
-    if tgid not in idbase[chat_idstr].keys():
-        idbase[chat_idstr][tgid] = tguser
+        name = {}
+        with open(filename, 'w') as f:
+            json.dump(name, f)
+    with open(filename) as f:
+        name = json.load(f)
+    return name
+    
+def dumpjson(filename, var):
+    with open(filename, 'w') as f:
+        json.dump(var, f)
         
-    if update.message.new_chat_member:
-        tguser = str(update.message.new_chat_member["username"])
-        tgid = str(update.message.new_chat_member["id"])
-        if chat_idstr not in idbase:
-            idbase[chat_idstr] = {}
-        if tgid not in idbase[chat_idstr].keys():
-            idbase[chat_idstr][tgid] = tguser
-            
-    if update.message.left_chat_member:
-        tguser = str(update.message.left_chat_member["username"])
-        tgid = str(update.message.left_chat_member["id"])
-        if chat_idstr not in idbase:
-            idbase[chat_idstr] = {}
-        if tgid not in idbase[chat_idstr].keys():
-            idbase[chat_idstr][tgid] = tguser
-
-    with open("idbase.json", 'w') as f:
-        json.dump(idbase, f)
-
-def kick_user(bot, update, args):
-    chat_id = update.message.chat_id
-    chat_idstr = str(update.message.chat_id)
-    global idbase
-    with open("idbase.json") as f:
-        idbase = json.load(f)
-        
-    str_args = ' '.join(args)
-    if "@" in str_args:
-        banuser = str_args.replace("@", "")
-        for tg_id, tg_user in idbase[chat_idstr].items():
-            if tg_user == banuser:
-                user_id = tg_id
-        if not user_id:
-            bot.sendMessage(chat_id=update.message.chat_id,
-                            text="I don't know anyone by that name!")
+def owner_admin_mod_check(bot, chat_id, chat_idstr, user_id):
+    promoted = loadjson('./promoted.json', "promoted.json")
+    if chat_idstr in promoted:
+        if user_id in get_admin_ids(bot, chat_id) or promoted[chat_idstr] or user_id == int(config['ADMIN']['id']):
+            return "true"
         else:
-            bot.kickChatMember(chat_id, user_id)
-            
-            bot.sendMessage(chat_id=update.message.chat_id,
-                            text="User @" + banuser + " removed from " + update.message.chat.title + " :(")
+            return "false"
     else:
-        bot.sendMessage(chat_id=update.message.chat_id,
-                        text="You can kick someone with /kick @username")
-    with open("idbase.json", 'w') as f:
-        json.dump(idbase, f)
-
-# bot functions
+        if user_id in get_admin_ids(bot, chat_id) or user_id == int(config['ADMIN']['id']):
+            return "true"
+        else:
+            return "false"
+def owner_check(bot, chat_id, user_id):
+    if user_id == int(config['ADMIN']['id']):
+        return "true"
+    else:
+        return "false"
+        
+# start and help come first
+    
 def start(bot, update):
     if update.message.chat.type == "private":
 
         bot.sendChatAction(chat_id=update.message.chat_id,
                            action=ChatAction.TYPING)
         bot.sendMessage(chat_id=update.message.chat_id,
-                        text="Hi. I'm Hunter's Jenkins Bot! You can use me to do lots of cool stuff, assuming your name is @hunter_bruhh! If not, then I'm not much use to you right now! Maybe he'll implement some cool stuff later!")
-        if update.message.from_user.id != int(config['ADMIN']['id']):
-            if jenkinsconfig == "yes":
-                bot.sendChatAction(chat_id=update.message.chat_id,
-                                   action=ChatAction.TYPING)
-                time.sleep(1)
-                bot.sendMessage(chat_id=update.message.chat_id,
-                                text=jenkinsnotmaster)
-                bot.sendChatAction(chat_id=update.message.chat_id,
-                                   action=ChatAction.TYPING)
-            else:
-                bot.sendChatAction(chat_id=update.message.chat_id,
-                                   action=ChatAction.TYPING)
-                time.sleep(1)
-                bot.sendMessage(chat_id=update.message.chat_id,
-                                text=nojenkinsnotmaster)
-                bot.sendChatAction(chat_id=update.message.chat_id,
-                                   action=ChatAction.TYPING)
-        else:
-            if jenkinsconfig == "yes":
-                bot.sendMessage(chat_id=update.message.chat_id,
-                                text=jenkinsmaster)
-                bot.sendChatAction(chat_id=update.message.chat_id,
-                                   action=ChatAction.TYPING)
-            else:
-                bot.sendMessage(chat_id=update.message.chat_id,
-                                text=nojenkinsmaster)
-                bot.sendChatAction(chat_id=update.message.chat_id,
-                                   action=ChatAction.TYPING)
+                        text="Hi. I'm BruhhBot! You can use me to do lots of cool stuff")
+                        
+        helpall = standardhelp + help_help
+            
+        bot.sendMessage(chat_id=update.message.chat_id,
+                            text=helpall)
 
 def help_message(bot, update, args):
-    jenkinsmasterlist = ["build", "changelog", "sync", "clean", "repopick", "pickopen", "open", "note"]
-    nojenkinsmasterlist = ["open", "note"]
-    nojenkinslist = ["open", "note"]
-    jenkinslist = ["open", "note"]
+    standardlist = ["time", "ban", "unban", "kick", "note", "banall", "unbanall", "add", "rem", "promote", "demote", "modlist", "lock", "unlock", "setflood", "settings"]
+
     args_length = len(args)
-    if update.message.from_user.id != int(config['ADMIN']['id']):
-        if jenkinsconfig == "yes":
-            if args_length != 0:
-                if args_length > 1:
-                    for x in jenkinslist:
-                        try:
-                            helpme
-                        except NameError:
-                            helpmeplox = "Please use only one argument. A list of arguments aka commands to ask about would be:\n"
-                    helpmeplox = helpmeplox + x + ",\n"
-                    helpme = helpmeplox
-                else:
-                    if args[0] in jenkinslist:
-                        if args[0] == "open":
-                            helpme = open_a_help + open_b_help
-                        if args[0] == "note":
-                            helpme = note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help
-                    else:
-                        helpme = "That's not a command to ask about."
-                bot.sendChatAction(chat_id=update.message.chat_id,
-                               action=ChatAction.TYPING)
-                time.sleep(1)
-                bot.sendMessage(chat_id=update.message.chat_id,
-                                text=helpme)
-            else:
-                bot.sendChatAction(chat_id=update.message.chat_id,
-                                   action=ChatAction.TYPING)
-                time.sleep(1)
-                bot.sendMessage(chat_id=update.message.chat_id,
-                                text=jenkinsnotmaster)
+    masterlist = standardlist
+    helpall = standardhelp + help_help
+    if args_length != 0:
+        if args_length > 1:
+            helpme = "Please only ask about one command. Some commands to consider asking about:\n" + ",\n".join(masterlist)
         else:
-            if args_length != 0:
-                if args_length > 1:
-                    for x in nojenkinslist:
-                        try:
-                            helpme
-                        except NameError:
-                            helpmeplox = "Please use only one argument. A list of arguments aka commands to ask about would be:\n"
-                    helpmeplox = helpmeplox + x + ",\n"
-                    helpme = helpmeplox
-                else:
-                    if args[0] in nojenkinslist:
-                        if args[0] == "open":
-                            helpme = open_a_help + open_b_help
-                        if args[0] == "note":
-                            helpme = note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help
-                    else:
-                        helpme = "That's not a command to ask about."
-                bot.sendChatAction(chat_id=update.message.chat_id,
-                               action=ChatAction.TYPING)
-                time.sleep(1)
-                bot.sendMessage(chat_id=update.message.chat_id,
-                                text=helpme)
-                bot.sendChatAction(chat_id=update.message.chat_id,
-                               action=ChatAction.TYPING)
-                time.sleep(1)
-                bot.sendMessage(chat_id=update.message.chat_id,
-                                text=helpme)
+            if args[0] in masterlist:
+                if args[0] == "note":
+                    helpme = note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help
+                if args[0] == "ban":
+                    helpme = ban_help
+                if args[0] == "unban":
+                    helpme = unban_help
+                if args[0] == "kick":
+                    helpme = kick_help
+                if args[0] == "time":
+                    helpme = time_help
+                if args[0] == "promote":
+                    helpme = promote_help
+                if args[0] == "demote":
+                    helpme = demote_help
+                if args[0] == "add":
+                    helpme = add_help
+                if args[0] == "rem":
+                    helpme = rem_help
+                if args[0] == "banall":
+                    helpme = banall_help
+                if args[0] == "unbanall":
+                    helpme = unbanall_help
+                if args[0] == "modlist":
+                    helpme = modlist_help
+                if args[0] == "save":
+                    helpme = save_help
+                if args[0] == "get":
+                    helpme = get_help
+                if args[0] == "lock":
+                    helpme = lock_help
+                if args[0] == "unlock":
+                    helpme = unlock_help
+                if args[0] == "setflood":
+                    helpme = setflood_help
+                if args[0] == "settings":
+                    helpme = settings_help
             else:
-                bot.sendChatAction(chat_id=update.message.chat_id,
-                                   action=ChatAction.TYPING)
-                time.sleep(1)
-                bot.sendMessage(chat_id=update.message.chat_id,
-                                text=nojenkinsnotmaster)
+                helpme = "That's not a command to ask about."
+        bot.sendChatAction(chat_id=update.message.chat_id,
+                       action=ChatAction.TYPING)
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text=helpme)
     else:
-        if jenkinsconfig == "yes":
-            if args_length != 0:
-                if args_length > 1:
-                    for x in jenkinsmasterlist:
-                        try:
-                            helpme
-                        except NameError:
-                            helpmeplox = "Please use only one argument. A list of arguments aka commands to ask about would be:\n"
-                    helpmeplox = helpmeplox + x + ",\n"
-                    helpme = helpmeplox
-                else:
-                    if args[0] in jenkinsmasterlist:
-                        if args[0] == "build":
-                            helpme = build_help
-                        if args[0] == "changelog":
-                            helpme = changelog_help
-                        if args[0] == "sync":
-                            helpme = sync_help
-                        if args[0] == "clean":
-                            helpme = clean_help
-                        if args[0] == "repopick":
-                            helpme = repopick_a_help + repopick_b_help
-                        if args[0] == "pickopen":
-                            helpme = pickopen_help
-                        if args[0] == "open":
-                            helpme = open_a_help + open_b_help
-                        if args[0] == "note":
-                            helpme = note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help
-                    else:
-                        helpme = "That's not a command to ask about."
-                bot.sendChatAction(chat_id=update.message.chat_id,
-                               action=ChatAction.TYPING)
-                time.sleep(1)
-                bot.sendMessage(chat_id=update.message.chat_id,
-                                text=helpme)
-            else:
-                bot.sendChatAction(chat_id=update.message.chat_id,
-                                   action=ChatAction.TYPING)
-                time.sleep(1)
-                bot.sendMessage(chat_id=update.message.chat_id,
-                                text=jenkinsmaster)
-        else:
-            if args_length != 0:
-                if args_length > 1:
-                    for x in nojenkinsmasterlist:
-                        try:
-                            helpme
-                        except NameError:
-                            helpmeplox = "Please use only one argument. A list of arguments aka commands to ask about would be:\n"
-                    helpmeplox = helpmeplox + x + ",\n"
-                    helpme = helpmeplox
-                else:
-                    if args[0] in nojenkinsmasterlist:
-                        if args[0] == "build":
-                            helpme = build_help
-                        if args[0] == "changelog":
-                            helpme = changelog_help
-                        if args[0] == "sync":
-                            helpme = sync_help
-                        if args[0] == "clean":
-                            helpme = clean_help
-                        if args[0] == "repopick":
-                            helpme = repopick_a_help + repopick_b_help
-                        if args[0] == "pickopen":
-                            helpme = pickopen_help
-                        if args[0] == "open":
-                            helpme = open_a_help + open_b_help
-                        if args[0] == "note":
-                            helpme = note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help
-                    else:
-                        helpme = "That's not a command to ask about."
-                bot.sendChatAction(chat_id=update.message.chat_id,
-                               action=ChatAction.TYPING)
-                time.sleep(1)
-                bot.sendMessage(chat_id=update.message.chat_id,
-                                text=helpme)
-            else:
-                bot.sendChatAction(chat_id=update.message.chat_id,
-                                   action=ChatAction.TYPING)
-                time.sleep(1)
-                bot.sendMessage(chat_id=update.message.chat_id,
-                                text=nojenkinsmaster)
-
-def link(bot, update, args):
         bot.sendChatAction(chat_id=update.message.chat_id,
-                           action=ChatAction.TYPING)
-        str_args = ' '.join(args)
-        args_length = len(args)
-        if str_args == "":
+                       action=ChatAction.TYPING)
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text=helpall)
+
+# real stuff
+def add(bot, update):
+    global moderated
+    chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+    if update.message.chat.type != "private":
+        if fromid in get_admin_ids(bot, update.message.chat_id):
+            if bot.id in get_admin_ids(bot, update.message.chat_id):
+                moderated = loadjson('./moderated.json', "moderated.json")
+                if chat_idstr not in moderated.keys():
+                    moderated[chat_idstr] = chat_id
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text=update.message.chat.title + " added to my records!")
+                else:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text=update.message.chat.title + " is already in my records")
+                with open("moderated.json", 'w') as f:
+                    json.dump(moderated, f)
+            else:
                 bot.sendMessage(chat_id=update.message.chat_id,
-                                text="You must provide change numbers to get a link to each change\n e.g. /link 99 123 345",
-                                parse_mode="Markdown")
-        else:
-            for i in range(args_length):
-                try:
-                    link
-                except NameError:
-                    link = ""
-                link = link + args[i] + " - " + protocol + "://" + gerriturl + "/#/c/" + args[i] + "/" + "\n"
-            bot.sendMessage(chat_id=update.message.chat_id,
-                                text=link)
-
-
-def openchanges(bot, update, args):
-
-        bot.sendChatAction(chat_id=update.message.chat_id,
-                           action=ChatAction.TYPING)
-        curl = "curl -H 'Accept-Type: application/json' " + protocol + "://" + gerrituser + "@" + gerriturl + "/changes/?q=status:open | sed '1d' > open.json"
-        command = subprocess.Popen(curl, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        with open('open.json', encoding='utf-8') as data_file:
-            data = json.load(data_file)
-        dict_length = len(data)
-        str_args = ' '.join(args)
-        args_length = len(args)
-        if str_args != "":
-            for i in range(dict_length):
-                try:
-                    openc
-                except NameError:
-                    openc = ""
-                if str(data[i]['project']) in args:
-                    openc = openc + "\n" + "<a href=" + '"' + protocol + "://" + gerriturl + "/#/c/" + str(data[i]['_number']) + "/" + '"' + ">" + str(data[i]['_number']) + "</a>" + " - " + str(data[i]['subject'])
-            print(openc)
-            for i in range(dict_length):
-                try:
-                    cnum
-                except NameError:
-                    cnum = "/repopick"
-                if str(data[i]['project']) in args:
-                    cnum = cnum + " " + str(data[i]['_number'])
-        else:
-            for i in range(dict_length):
-                try:
-                    openc
-                except NameError:
-                    openc = ""
-                openc = openc + "\n" + "<a href=" + '"' + protocol + "://" + gerriturl + "/#/c/" + str(data[i]['_number']) + "/" + '"' + ">" + str(data[i]['_number']) + "</a>" + " - " + str(data[i]['subject'])
-            for i in range(dict_length):
-                try:
-                    cnum
-                except NameError:
-                    cnum = "/repopick"
-                cnum = cnum + " " + str(data[i]['_number'])
-        print(openc)
-        print(cnum)
-        if update.message.from_user.id == int(config['ADMIN']['id']):
-
-            bot.sendMessage(chat_id=update.message.chat_id,
-                            text=openc,
-                            parse_mode="HTML")
-            bot.sendMessage(chat_id=update.message.chat_id,
-                            text=cnum,
-                            parse_mode="Markdown")
+                                text="I need to be an admin to moderate groups!")
         else:
             bot.sendMessage(chat_id=update.message.chat_id,
-                            text=openc,
-                            parse_mode="HTML")
+                            text="You gotta be an admin to tell me what to do!")
+    else:
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="I only work with groups! Sorry pal")
+            
+            
+def rem(bot, update):
+    global moderated
+    chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+    if update.message.chat.type != "private":
+        if get_user_info(bot, chat_id, fromid, "", "status") == "creator":
+            if bot.id in get_admin_ids(bot, update.message.chat_id):
+                moderated = loadjson('./moderated.json', "moderated.json")
+                if chat_idstr in moderated.keys():
+                    del moderated[chat_idstr]
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text=update.message.chat.title + " removed from my records!")
+                else:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text=update.message.chat.title + " isn't even in my book bro")
+                with open("moderated.json", 'w') as f:
+                    json.dump(moderated, f)
+            else:
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text="I need to be an admin to moderate groups!")
+        else:
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text="Umm, pretty sure the creator of this group should tell me whether to leave or not.")
+    else:
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="I only work with groups! Sorry pal")
+                            
+def receiveMessage(bot, update):
+    global idbase
+    global moderated
+    global banbase
+    global promoted
+    global locked
+    
+    idbase = loadjson('./idbase.json', "idbase.json")
+
+    if update.message.chat.type != "private":
+        tguser = str(update.message.from_user.username).lower()
+        tgid = str(update.message.from_user.id)
+        chat_idstr = str(update.message.chat_id)
+        chat_id = update.message.chat_id
+        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+
+        moderated = loadjson('./moderated.json', "moderated.json")
+            
+        banbase = loadjson('./banbase.json', "banbase.json")
+            
+        promoted = loadjson('./promoted.json', "promoted.json")
+            
+        locked = loadjson('./locked.json', "locked.json")
+ 
+        if chat_idstr not in locked.keys():
+            locked[chat_idstr] = {}
+            locked[chat_idstr]["sticker"] = "no"
+            locked[chat_idstr]["gif"] = "no"
+            locked[chat_idstr]["flood"] = "no"
+            locked[chat_idstr]["arabic"] = "yes"
+        if chat_idstr not in promoted.keys():
+            promoted[chat_idstr] = []
+        if chat_idstr not in idbase.keys():
+            idbase[chat_idstr] = {}
+        if chat_idstr not in banbase.keys():
+            banbase[chat_idstr] = []
+        if "global" not in banbase.keys():
+            banbase["global"] = []
+        if fromidstr not in idbase[chat_idstr].keys():
+            idbase[chat_idstr][fromidstr] = tguser
+        else:
+            olduser = idbase[chat_idstr][fromidstr]
+            if olduser != tguser:
+                idbase[chat_idstr][fromidstr] = tguser
+        if fromidstr in banbase[chat_idstr]:
+            bot.kickChatMember(chat_id, fromidstr)
+        if fromidstr in banbase["global"]:
+            bot.kickChatMember(chat_id, fromidstr)
+        if update.message.new_chat_member:
+            tguser = str(update.message.new_chat_member["username"]).lower()
+            tgid = str(update.message.new_chat_member["id"])
+            if chat_idstr not in idbase.keys():
+                idbase[chat_idstr] = {}
+            if tgid not in idbase[chat_idstr].keys():
+                idbase[chat_idstr][tgid] = tguser
+            else:
+                olduser = idbase[chat_idstr][tgid]
+                if olduser != tguser:
+                    idbase[chat_idstr][tgid] = tguser            
+            if tgid in banbase[chat_idstr]:
+                bot.kickChatMember(chat_id, tgid)
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text="@" + tguser + " is not allowed here ^-^")
+            if tgid in banbase["global"]:
+                bot.kickChatMember(chat_id, tgid)
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text="@" + tguser + " ....I really don't like them. '_'")
+            
+        if update.message.left_chat_member:
+            tguser = str(update.message.left_chat_member["username"]).lower()
+            tgid = str(update.message.left_chat_member["id"])
+            if chat_idstr not in idbase:
+                idbase[chat_idstr] = {}
+            if tgid not in idbase[chat_idstr].keys():
+                idbase[chat_idstr][tgid] = tguser
+            else:
+                olduser = idbase[chat_idstr][tgid]
+                if olduser != tguser:
+                    idbase[chat_idstr][tgid] = tguser
+    if update.message.forward_from:
+        tguser = str(update.message.forward_from["username"]).lower()
+        tgid = str(update.message.forward_from["id"])
+        if chat_idstr not in idbase.keys():
+            idbase[chat_idstr] = {}
+        if tgid not in idbase[chat_idstr].keys():
+            idbase[chat_idstr][tgid] = tguser
+        else:
+            olduser = idbase[chat_idstr][tgid]
+            if olduser != tguser:
+                idbase[chat_idstr][tgid] = tguser
+    print(update.message)
+    dumpjson("idbase.json", idbase)
+    dumpjson("banbase.json", banbase)
+    dumpjson("promoted.json", promoted)
+    dumpjson("locked.json", locked)
+
+def receiveLocked(bot, update):
+    if update.message.chat.type != "private":
+        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+        if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "false":
+            if bot.id in get_admin_ids(bot, update.message.chat_id):
+                sentlock = loadjson('./sentlock.json', "sentlock.json")
+                if chat_idstr not in sentlock.keys():
+                    sentlock[chat_idstr] = {}
+                if update.message.sticker:
+                    if locked[chat_idstr]["sticker"] == "yes":
+                        if fromidstr not in sentlock[chat_idstr].keys():
+                            sentlock[chat_idstr][fromidstr] = 1
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="Stickers are locked in this chat. If you send 2 more you will be kicked! Please don't make me do that :)")
+                        else:
+                            if sentlock[chat_idstr][fromidstr] == 1:
+                                bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="Don't do it again! No stickers please.")
+                                sentlock[chat_idstr][fromidstr] = 2
+                                
+                            else:
+                                if sentlock[chat_idstr][fromidstr] == 2:
+                                    bot.sendMessage(chat_id=update.message.chat_id,
+                                                    text="Stickers are not allowed here.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked.")
+                                    bot.kickChatMember(chat_id, fromid)
+                if update.message.text:
+                    if locked[chat_idstr]["arabic"] == "yes":
+                        message_text = update.message.text
+                        if detect(message_text) == "ar":
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="Arabic is locked.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked.")
+                            bot.kickChatMember(chat_id, fromid)
+
+                dumpjson("sentlock.json", sentlock)
+        
+def floodcheck(bot, update):
+    global flooding
+    if update.message.chat.type != "private":
+        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+        if bot.id in get_admin_ids(bot, update.message.chat_id):
+            flooding = loadjson('./flooding.json', "flooding.json")
+            locked = loadjson('./locked.json', "locked.json")
+            idbase = loadjson('./idbase.json', "idbase.json")
+
+            if chat_idstr not in flooding.keys():
+                flooding[chat_idstr] = {}
+                flooding[chat_idstr]["limit"] = 5
+                flooding[chat_idstr]["floodmember"] = fromidstr
+                flooding[chat_idstr]["floodcount"] = 1
+            if update.message:
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) != "true":
+                    if locked[chat_idstr]["flood"] == "yes":
+                        limit = flooding[chat_idstr]["limit"]
+                        count = flooding[chat_idstr]["floodcount"]
+                        if fromidstr == flooding[chat_idstr]["floodmember"]:
+                            if count < limit:
+                                flooding[chat_idstr]["floodcount"] += 1
+                            else:
+                                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) != "true":
+                                    promoted = loadjson('./promoted.json', "promoted.json")
+                                    if promoted[chat_idstr]:
+                                        if fromid not in promoted[chat_idstr]["mods"]:
+                                            bot.sendMessage(chat_id=update.message.chat_id,
+                                                            text="Flooding is not allowed here.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked")
+                                            bot.kickChatMember(chat_id, fromid)
+                                            flooding[chat_idstr]["floodcount"] = 1
+                                    else:
+                                        bot.sendMessage(chat_id=update.message.chat_id,
+                                                        text="Flooding is not allowed here.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked")
+                                        bot.kickChatMember(chat_id, fromid)
+                                        flooding[chat_idstr]["floodcount"] = 1
+                        else:
+                            flooding[chat_idstr]["floodmember"] = fromidstr
+                            flooding[chat_idstr]["floodcount"] = 1
+                        
+            dumpjson("flooding.json", flooding)
+    
+def modlist(bot, update):
+    if update.message.chat.type != "private":
+        if bot.id in get_admin_ids(bot, update.message.chat_id):
+            chat_idstr = str(update.message.chat_id)
+            chat_title = update.message.chat.title
+            moderated = loadjson('./moderated.json', "moderated.json")
+            promoted = loadjson('./promoted.json', "promoted.json")
+            idbase = loadjson('./idbase.json', "idbase.json")
+
+            if chat_idstr in moderated:
+                if promoted[chat_idstr]:
+                    for user in promoted[chat_idstr]:
+                        for userid, username in idbase[chat_idstr].items():
+                            if str(user) == userid:
+                                try:
+                                    userlist
+                                except NameError:
+                                    userlist = "Moderators for " + chat_title + ":\n"
+                                userlist = userlist + "@" + username + "\n"
+                else:
+                    userlist = "No moderators for this chat!"
+                try:
+                    userlist
+                except NameError:
+                    userlist = "No moderators for this chat!"
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text=userlist)
+                                
+            else:
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+        else:                            
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+    else:
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="I only work with groups! Sorry pal")
+                        
+def promoteme(bot, update, args):
+    if bot.id in get_admin_ids(bot, update.message.chat_id):
+        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+        moderated = loadjson('./moderated.json', "moderated.json")
+        if chat_idstr in moderated:
+            if get_user_info(bot, chat_id, fromid, "", "status") == "creator":
+                global idbase
+                global promoted
+                
+                promoted = loadjson('./promoted.json', "promoted.json")
+                idbase = loadjson('./idbase.json', "idbase.json")
+                
+                str_args = ' '.join(args)
+                if "@" in str_args:
+                    promoteuser = str_args.replace("@", "").lower()
+                    for tg_id, tg_user in idbase[chat_idstr].items():
+                        if tg_user == promoteuser:
+                            user_id = tg_id
+                    try:
+                        user_id
+                    except NameError:
+                        user_id = ""
+                        bot.sendMessage(chat_id=update.message.chat_id,
+                                        text="I don't know anyone by that name!")
+                    if chat_idstr not in promoted.keys():
+                        promoted[chat_idstr] = []
+                    if user_id:
+                        promoteuser = str_args.replace("@", "")
+                        if promoted[chat_idstr]:
+                            if user_id not in promoted[chat_idstr]:
+                                promoted[chat_idstr] = promoted[chat_idstr] + [user_id]
+                                bot.sendMessage(chat_id=update.message.chat_id,
+                                                text="User @" + promoteuser + " is now a mod of " + update.message.chat.title + "! Congratulations!")
+                            else:
+                                bot.sendMessage(chat_id=update.message.chat_id,
+                                                text="User @" + promoteuser + " is already a moderator.")
+                        else:
+                            promoted[chat_idstr] = []
+                            promoted[chat_idstr] = [user_id]
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="User @" + promoteuser + " is now a mod of " + update.message.chat.title + "! Congratulations!")
+        
+                else:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text="You can ban promote someone with /promote @username")
+                                    
+                dumpjson("promoted.json", promoted)
+
+            else:
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text="Only the creator can do stuff like that!")
+        else:
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+
+    else:
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+
+def demoteme(bot, update, args):
+    if bot.id in get_admin_ids(bot, update.message.chat_id):
+        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+        moderated = loadjson('./moderated.json', "moderated.json")
+        if chat_idstr in moderated:
+            if get_user_info(bot, chat_id, fromid, "", "status") == "creator":
+                global idbase
+                global promoted
+            
+                promoted = loadjson('./promoted.json', "promoted.json")
+                idbase = loadjson('./idbase.json', "idbase.json")
+                    
+                str_args = ' '.join(args)
+                if "@" in str_args:
+                    demoteuser = str_args.replace("@", "").lower()
+                    for tg_id, tg_user in idbase[chat_idstr].items():
+                        if tg_user == demoteuser:
+                            user_id = tg_id
+                    try:
+                        user_id
+                    except NameError:
+                        user_id = ""
+                        bot.sendMessage(chat_id=update.message.chat_id,
+                                        text="I don't know anyone by that name! *hint* they must say something for me to get to know them!")
+                    if chat_idstr not in promoted.keys():
+                            promoted[chat_idstr] = []
+                    if user_id:
+                        if promoted[chat_idstr]:
+                            if user_id in promoted[chat_idstr]:
+                                demoteuser = str_args.replace("@", "")
+                                promoted[chat_idstr] = promoted[chat_idstr].remove(user_id)
+                                bot.sendMessage(chat_id=update.message.chat_id,
+                                                text="User @" + demoteuser + " is no longer a moderator of " + update.message.chat.title + " :(")
+                            else:
+                                bot.sendMessage(chat_id=update.message.chat_id,
+                                                text="User @" + demoteuser + " is not a moderator. Good thing, cause they were about to lose that anyway")
+                        else:
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="We don't even have any moderators.")
+                else:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text="You can demote someone with /demote @username")
+                dumpjson("promoted.json", promoted)
+
+            else:
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text="Only the creator can do stuff like that!")
+        else:
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+    else:                            
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+
+
+def unbanme(bot, update, args):
+    if bot.id in get_admin_ids(bot, update.message.chat_id):
+        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+        moderated = loadjson('./moderated.json', "moderated.json")
+        if chat_idstr in moderated:
+
+            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
+                global idbase
+                global banbase
+                
+                banbase = loadjson('./banbase.json', "banbase.json")
+                idbase = loadjson('./idbase.json', "idbase.json")
+                    
+                str_args = ' '.join(args)
+                if "@" in str_args:
+                    unbanuser = str_args.replace("@", "").lower()
+                    for tg_id, tg_user in idbase[chat_idstr].items():
+                        if tg_user == unbanuser:
+                            user_id = tg_id
+                    try:
+                        user_id
+                    except NameError:
+                        user_id = ""
+                        bot.sendMessage(chat_id=update.message.chat_id,
+                                        text="I don't know anyone by that name!")
+                    if chat_idstr not in banbase.keys():
+                            banbase[chat_idstr] = []
+                    if user_id:
+                        if user_id in banbase[chat_idstr]:
+                            unbanuser = str_args.replace("@", "")
+                            banbase[chat_idstr].remove(user_id)
+                            bot.unbanChatMember(chat_id, user_id)
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="User @" + unbanuser + " is welcome in " + update.message.chat.title + " once again :)")
+                        else:
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="User @" + unbanuser + " is not banned from this chat. Maybe you meant someone else?")
+                else:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text="You can unban someone with /unban @username")
+                dumpjson("banbase.json", banbase)
+            else:
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text="Only mods can do stuff like that!")
+        else:
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+    else:
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+          
+def unbanall(bot, update, args):
+    if bot.id in get_admin_ids(bot, update.message.chat_id):
+        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+        moderated = loadjson('./moderated.json', "moderated.json")
+        if chat_idstr in moderated:
+            if owner_check(bot, chat_id, fromid) == "true":
+                global idbase
+                global banbase
+                
+                banbase = loadjson('./banbase.json', "banbase.json")
+                idbase = loadjson('./idbase.json', "idbase.json")
+                    
+                str_args = ' '.join(args)
+                if "@" in str_args:
+                    unbanuser = str_args.replace("@", "").lower()
+                    for tg_id, tg_user in idbase[chat_idstr].items():
+                        if tg_user == unbanuser:
+                            user_id = tg_id
+                    try:
+                        user_id
+                    except NameError:
+                        user_id = ""
+                        bot.sendMessage(chat_id=update.message.chat_id,
+                                        text="I don't know anyone by that name!")
+                    if user_id:
+                        if owner_admin_mod_check(bot, chat_id, chat_idstr, user_id) != "true":
+                            unbanuser = str_args.replace("@", "")
+                            for string, chat in moderated.items():
+                                bot.unbanChatMember(chat, user_id)
+                            if user_id in banbase["global"]:
+                                banbase["global"].remove(user_id)
+                                bot.sendMessage(chat_id=update.message.chat_id,
+                                                text="User @" + unbanuser + " globally unbanned from all my chats!")
+                            else:
+                                bot.sendMessage(chat_id=update.message.chat_id,
+                                                text="User @" + unbanuser + " is not globally banned!")
+                        else:
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="You can't gban mods! &$%^# ")
+        
+                else:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text="You can global unban someone with /unbanall @username")
+                dumpjson("banbase.json", banbase)
+            else:
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text="Only my owner can do stuff like that!")
+        else:
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+    else:
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+                        
+def banall(bot, update, args):
+    if bot.id in get_admin_ids(bot, update.message.chat_id):
+        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+        moderated = loadjson('./moderated.json', "moderated.json")
+        if chat_idstr in moderated:
+            if owner_check(bot, chat_id, fromid) == "true":
+                global idbase
+                global banbase
+                
+                banbase = loadjson('./banbase.json', "banbase.json")
+                idbase = loadjson('./idbase.json', "idbase.json")
+                
+                str_args = ' '.join(args)
+                if "@" in str_args:
+                    banuser = str_args.replace("@", "").lower()
+                    for tg_id, tg_user in idbase[chat_idstr].items():
+                        if tg_user == banuser:
+                            user_id = tg_id
+                    try:
+                        user_id
+                    except NameError:
+                        user_id = ""
+                        bot.sendMessage(chat_id=update.message.chat_id,
+                                        text="I don't know anyone by that name!")
+                    if user_id:
+                        if owner_admin_mod_check(bot, chat_id, chat_idstr, user_id) != "true":
+                            banuser = str_args.replace("@", "")
+                            for string, chat in moderated.items():
+                                bot.kickChatMember(chat, user_id)
+                            banbase["global"] = banbase["global"] + [user_id]
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="User @" + banuser + " globally banned from all my chats!")
+                        else:
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="You can't gban mods! &$%^# ")
+        
+                else:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text="You can global ban someone with /banall @username")
+                dumpjson("banbase.json", banbase)
+            else:
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text="Only my owner can do stuff like that!")
+        else:
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+    else:
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+        
+
+def banme(bot, update, args):
+    if bot.id in get_admin_ids(bot, update.message.chat_id):
+        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+        moderated = loadjson('./moderated.json', "moderated.json")
+        if chat_idstr in moderated:
+            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
+                global idbase
+                global banbase
+                
+                banbase = loadjson('./banbase.json', "banbase.json")
+                idbase = loadjson('./idbase.json', "idbase.json")
+                    
+                str_args = ' '.join(args)
+                if "@" in str_args:
+                    banuser = str_args.replace("@", "").lower()
+                    for tg_id, tg_user in idbase[chat_idstr].items():
+                        if tg_user == banuser:
+                            user_id = tg_id
+                    try:
+                        user_id
+                    except NameError:
+                        user_id = ""
+                        bot.sendMessage(chat_id=update.message.chat_id,
+                                        text="I don't know anyone by that name!")
+                    if chat_idstr not in banbase.keys():
+                        banbase[chat_idstr] = []
+                    if user_id:
+                        if owner_admin_mod_check(bot, chat_id, chat_idstr, user_id) != "true":
+                            banuser = str_args.replace("@", "")
+                            bot.kickChatMember(chat_id, user_id)
+                            banbase[chat_idstr] = banbase[chat_idstr] + [user_id]
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="User @" + banuser + " banned from " + update.message.chat.title + " :(")
+                        else:
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="You can't ban mods! &$%^# ")
+        
+                else:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text="You can ban someone with /ban @username")
+                dumpjson("banbase.json", banbase)
+            else:
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text="Only mods can do stuff like that!")
+        else:
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+    else:
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+        
+def kick_user(bot, update, args):
+    if bot.id in get_admin_ids(bot, update.message.chat_id):
+        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+        moderated = loadjson('./moderated.json', "moderated.json")
+        if chat_idstr in moderated:
+            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
+                global idbase
+                idbase = loadjson('./idbase.json', "idbase.json")
+                str_args = ' '.join(args)
+                if "@" in str_args:
+                    banuser = str_args.replace("@", "").lower()
+                    for tg_id, tg_user in idbase[chat_idstr].items():
+                        if tg_user == banuser:
+                            user_id = tg_id
+                    try:
+                        user_id
+                    except NameError:
+                        user_id = ""
+                        bot.sendMessage(chat_id=update.message.chat_id,
+                                        text="I don't know anyone by that name!")
+                    if user_id:
+                        if owner_admin_mod_check(bot, chat_id, chat_idstr, user_id) != "true":
+                            banuser = str_args.replace("@", "")
+                            bot.kickChatMember(chat_id, user_id)
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="User @" + banuser + " removed from " + update.message.chat.title + " :(")
+                        else:
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="You can't kick mods! &$%^# ")
+                else:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text="You can kick someone with /kick @username")
+            else:
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text="Only mods can do stuff like that!")
+        else:
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+    else:
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
 
 def note(bot, update, args):
     global notes
-    PATH='./notes.json'
-    if not os.path.isfile(PATH) or not os.access(PATH, os.R_OK):
-        print ("Either file is missing or is not readable. Creating.")
-        notes = {}
-        with open("notes.json", 'w') as f:
-            json.dump(notes, f)
-    with open("notes.json") as f:
-        notes = json.load(f)
-    chat_idstr = str(update.message.chat_id)
+    notes = loadjson('./notes.json', "notes.json")
+    chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
     try:
         notes
     except NameError:
@@ -490,28 +892,27 @@ def note(bot, update, args):
         if notename in commands:
             if notename == "clearall":
                 if update.message.chat.type != "private":
-                    if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
+                    if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                         saveme = notes[chat_idstr]["admin"]
                         del notes[chat_idstr]
                         notes[chat_idstr] = {}
                         notes[chat_idstr]["admin"] = {}
                         notes[chat_idstr]["admin"] = saveme
-                        with open("notes.json", 'w') as f:
-                            json.dump(notes, f)
+                        dumpjson("notes.json", notes)
                         note = "Notes cleared for " + update.message.chat.title
                     else:
-                        note = "clearall is for admins only chutiya"
+                        note = "clearall is for mods only! `-`"
                 else:
                     del notes[chat_idstr]
                     note = "Notes cleared for this chat"
                     
             if notename == "clearlock":
                 if update.message.chat.type != "private":
-                    if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
+                    if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                         del notes[chat_idstr]["admin"]
                         note = "Locked notes cleared for this chat"
                     else:
-                        note = "clearlock is ESPECIALLY for admins only chutiya"
+                        note = "clearlock is ESPECIALLY for mods only! ~_~"
                 else:
                     note = "clearlock only for groups"
         else:
@@ -542,7 +943,7 @@ def note(bot, update, args):
                     if notename in commands:
                         note = "Notes cannot be command names."
                     else:
-                        if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
+                        if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                             if notename in notes[chat_idstr]["admin"]:
                                 del notes[chat_idstr]["admin"][notename]
                                 note = "Cleared the note " + notename
@@ -551,9 +952,9 @@ def note(bot, update, args):
                                     del notes[chat_idstr][notename]
                                     note = "Cleared the note " + notename
                                 else:
-                                    note = notename + " doesn't exist."
+                                    note = "The note " + notename + " doesn't exist."
                         else:
-                            note = "Only admins can clear notes!"
+                            note = "Only mods can clear notes `-`!"
                 else:
                     notename = args[0]
                     if notename in commands:
@@ -563,7 +964,7 @@ def note(bot, update, args):
                             del notes[chat_idstr][notename]
                             note = "Cleared the note " + notename
                         else:
-                            note = notename + " doesn't exist."
+                            note = "The note " + notename + " doesn't exist."
         
             if notename == "lock":
                 if update.message.chat.type != "private":
@@ -572,7 +973,7 @@ def note(bot, update, args):
                     if notename in commands:
                         note = "Notes cannot be command names."
                     else:                    
-                        if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
+                        if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                             lockednote = args[0]
                             del args[0]
                             str_args = ' '.join(args)
@@ -589,7 +990,7 @@ def note(bot, update, args):
                                     notes[chat_idstr]["admin"][lockednote] = str_args
                                     note = lockednote + " has been locked. Any note for regular users with the same name has been deleted."
                         else:
-                            note = "Only admins can create locked notes or lock existing notes"
+                            note = "Only mods can create locked notes or lock existing notes! `-`"
                 else:
                     note = "locking notes is only for groups"
             if notename == "unlock":
@@ -599,7 +1000,7 @@ def note(bot, update, args):
                     if notename in commands:
                         note = "Notes cannot be command names."
                     else:                    
-                        if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
+                        if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                             lockednote = args[0]
                             del args[0]
                             if lockednote in notes[chat_idstr]:
@@ -613,16 +1014,16 @@ def note(bot, update, args):
                                 else:
                                     note = lockednote + " is not a locked note"                                             
                         else:
-                            note = "Only admins can unlock notes"
+                            note = "Only mods can unlock notes! `-`"
                 else:
                     note = "unlocking notes is only for groups"
         else:
             if notename in notes[chat_idstr]["admin"]:
-                if update.message.from_user.id in get_admin_ids(bot, update.message.chat_id):
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                     notes[chat_idstr]["admin"][notename] = notes[chat_idstr]["admin"][notename] = notes[chat_idstr]["admin"][notename] + "\n" + str_args
                     note = str_args + " added to note " + notename
                 else:
-                    note = notename + " is locked. Only admins can edit this note"
+                    note = notename + " is locked. Only mods can edit this note! '_'"
             else:
                 try:
                     notes[chat_idstr][notename] = notes[chat_idstr][notename] + "\n" + str_args
@@ -636,8 +1037,7 @@ def note(bot, update, args):
         note = "something went wrong"
     bot.sendMessage(chat_id=update.message.chat_id,
                     text=note)
-    with open("notes.json", 'w') as f:
-        json.dump(notes, f)
+    dumpjson("notes.json", notes)
 
 def time_command(bot, update, args):
     str_args = ' '.join(args)
@@ -665,306 +1065,278 @@ def time_command(bot, update, args):
                     text=dt_time)
     print(dt_time)
     return(dt_time)
-    
 
-if jenkinsconfig == "yes":
-    def pickopen(bot, update):
-        if update.message.from_user.id == int(config['ADMIN']['id']):
-            bot.sendChatAction(chat_id=update.message.chat_id,
-                               action=ChatAction.TYPING)
-            curl = "curl -H 'Accept-Type: application/json' " + protocol + "://" + gerrituser + "@" + gerriturl + "/changes/?q=status:open | sed '1d' > open.json"
-            command = subprocess.Popen(curl, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            with open('open.json', encoding='utf-8') as data_file:
-                data = json.load(data_file)
-            dict_length = len(data)
-            for i in range(dict_length):
-                try:
-                    cnumbers
-                except NameError:
-                    cnumbers = ""
-                cnumbers = cnumbers + " " + str(data[i]['_number'])
-            print(cnumbers)
-            text = "I will pick all open changes: " + cnumbers
-            bot.sendMessage(chat_id=update.message.chat_id,
-                            text=text,
-                            parse_mode="Markdown")
-            global rpick
-            cnumbers.replace(" ", "%20")
-            cnumbers_url = cnumbers.replace(" ", "%20")
-            rpick = cnumbers_url
-
-def choosebuild(bot, update):
-    if update.message.from_user.id == int(config['ADMIN']['id']):
-        keyboard = [[InlineKeyboardButton("Without Paramaters", callback_data='build')],
-
-                    [InlineKeyboardButton("With Parameters", callback_data='buildWithParameters')]]
-
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        update.message.reply_text('Please choose a build style:', reply_markup=reply_markup)
-
-def sync(bot, update):
-    if update.message.from_user.id == int(config['ADMIN']['id']):
-        keyboard = [[InlineKeyboardButton("YES", callback_data='syncon')],
-
-                    [InlineKeyboardButton("NO", callback_data='syncoff')]]
-
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        update.message.reply_text('Would you like to sync on a new build?:', reply_markup=reply_markup)
-
-def clean(bot, update):
-    if update.message.from_user.id == int(config['ADMIN']['id']):
-        keyboard = [[InlineKeyboardButton("YES", callback_data='cleanon')],
-
-                    [InlineKeyboardButton("NO", callback_data='cleanoff')]]
-
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        update.message.reply_text('Would you like to clean on a new build?:', reply_markup=reply_markup)
-
-def buildwithparams(bot, update, query):
-    query = update.callback_query
-    bot.sendMessage(chat_id=query.message.chat_id,
-                    text="You have selected the 'buildWithParameters option, this will include a custom changelog with your build, and will specify whether to sync & clean or not",
-                    parse_mode="Markdown")
-    user_id = update.callback_query.from_user.id
+def save_message(bot, update, args):
+    global saved
+    saved = loadjson('./saved.json', "saved.json")
+    chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
     try:
-        cg
+        saved
     except NameError:
-        bot.sendMessage(chat_id=query.message.chat_id,
-                        text="You have selected the 'buildWithParameters option, but the changelog is empty. Please use /changelog + 'text' to provide a changlog for your users.",
-                        parse_mode="Markdown")
-        return 1
-    try:
-        syncparam
-    except NameError:
-        bot.sendMessage(chat_id=query.message.chat_id,
-                text="You have selected the 'buildWithParameters option, but have not specified whether you would like to sync before building. Please use /sync to do so.",
-                parse_mode="Markdown")
-        return 1
-    try:
-        cleanparam
-    except NameError:
-        bot.sendMessage(chat_id=query.message.chat_id,
-                text="You have selected the 'buildWithParameters option, but have not specified whether you would like to clean before building. Please use /clean to do so.",
-                parse_mode="Markdown")
-        return 1
-    try:
-        repopickstatus
-    except NameError:
-        bot.sendMessage(chat_id=query.message.chat_id,
-                        text="You have selected the 'buildWithParameters option, but repopick isn't turned on or off. Turn it on or off with /repopick",
-                        parse_mode="Markdown")
-        return 1
-    if repopickstatus == "true":
-        try:
-            rpick
-        except NameError:
-            bot.sendMessage(chat_id=query.message.chat_id,
-                            text="You have selected the 'buildWithParameters option, repopick is on, but it's empty. Please use /repopick + 'changes' to pick changes from gerrit, or turn repopick off with /repopick",
-                            parse_mode="Markdown")
-            return 1
-    if cg:
-        if syncparam:
-            if cleanparam:
-                global changelog
-                changelog = quote_plus('cg')
-                command_string = jenkins + "/job/" + job + "/buildWithParameters?token=" + token + "&changelog=" + cg + "&SYNC=" + syncparam + "&CLEAN=" + cleanparam + "&repopicks=" + rpick
-                command = "curl --user " + user + ":" + password + " " + "'" + command_string + "'"
-                print (command)
-                if user_id == int(config['ADMIN']['id']):
-                    bot.sendChatAction(chat_id=query.message.chat_id,
-                                       action=ChatAction.TYPING)
-                    output = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                    output = output.stdout.read().decode('utf-8')
-                    output = '`{0}`'.format(output)
+        saved = {}
+    if chat_idstr not in saved.keys():
+        saved[chat_idstr] = {}
 
-                    bot.sendMessage(chat_id=query.message.chat_id,
-                                    text=output,
-                                    parse_mode="Markdown")
-            else:
-                bot.sendMessage(chat_id=query.message.chat_id,
-                                text="You have selected the 'buildWithParameters option, but have not specified whether you would like to clean before building. Please use /clean to do so.",
-                                parse_mode="Markdown")
+    if len(args) == 0:
+        saves = "Save a message with\n/save 'name' 'message'\nand retrieve it later with\n/get 'name'"
+    if len(args) == 1:
+        saves = "Save a message with\n/save 'name' 'message'\nand retrieve it later with\n/get 'name'"
+        savename = args[0]
+        if savename in saved[chat_idstr]:
+            saves = savename + ":\n" + str(saved[chat_idstr][savename])
         else:
-            bot.sendMessage(chat_id=query.message.chat_id,
-                            text="You have selected the 'buildWithParameters option, but have not specified whether you would like to sync before building. Please use /sync to do so.",
-                            parse_mode="Markdown")
-    else:
-        bot.sendMessage(chat_id=query.message.chat_id,
-                            text="You have selected the 'buildWithParameters option, but the changelog is empty. Please use /changelog + 'text' to provide a changlog for your users.",
-                            parse_mode="Markdown")
+            saves = "That name isn't saved yet! You can create it with\n/save " + savename + " 'message'"
+    if len(args) > 1:
+        message_text = update.message.text
+        savename = args[0]
+        message_text = message_text.split(' ', 2)[2]
+        saved[chat_idstr][savename] = message_text
+        saves = "Saved " + savename
+    try:
+        saves
+    except NameError:
+        saves = "something went wrong"
+    bot.sendMessage(chat_id=update.message.chat_id,
+                    text=saves)
+    jsondump("saved.json", saved)
+
+def get_message(bot, update, args):
+    global saved
+    saved = loadjson('./saved.json', "saved.json")
+    chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
 
 
-def buildwithoutparams(bot, update, query):
-    user_id = update.callback_query.from_user.id
-    command_string = jenkins + "/job/" + job + "/buildWithParameters?token=" + token
-    command = "curl --user " + user + ":" + password + " " + "'" + command_string + "'"
-    print (command)
-    if user_id == int(config['ADMIN']['id']):
-        bot.sendChatAction(chat_id=query.message.chat_id,
-                           action=ChatAction.TYPING)
-        output = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        output = output.stdout.read().decode('utf-8')
-        output = '`{0}`'.format(output)
+    if len(args) == 0:
+        getme = "Get a saved message with\n/get 'name'"
+    if len(args) == 1:
+        savename = args[0]
+        if savename in saved[chat_idstr]:
+            getme = savename + ":\n" + str(saved[chat_idstr][savename])
+        else:
+            getme = "That name isn't saved yet! You can create it with\n/save " + savename + " 'message'"
+    if len(args) > 1:
+        getme = "Only try to retrieve one saved message at a time!\nGet a saved message with\n/get 'name'"
 
-        bot.sendMessage(chat_id=query.message.chat_id,
-                        text=output, parse_mode="Markdown")
-
-def changelog(bot, update, args):
-        if update.message.from_user.id == int(config['ADMIN']['id']):
-            global cg
-            user = update.message.from_user
-
-            str_args = ' '.join(args)
-            if str_args != "":
-                update.message.reply_text('Changelog updated: ' + "'" + str_args + "'")
-                cgs = '%20'.join(args)
-                cg = cgs
-                print ("Changelog set to " + "'" + cg + "'")
+    try:
+        getme
+    except NameError:
+        getme = "something went wrong"
+    bot.sendMessage(chat_id=update.message.chat_id,
+                    text=getme)
+                    
+def lockme(bot, update, args):
+    if bot.id in get_admin_ids(bot, update.message.chat_id):
+        global locked
+        lockedmsg = ""
+        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+        moderated = loadjson('./moderated.json', "moderated.json")
+        if chat_idstr in moderated:
+            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
+                locked = loadjson('./locked.json', "locked.json")
+                if chat_idstr not in locked.keys():
+                    locked[chat_idstr] = {}
+                    locked[chat_idstr]["sticker"] = "no"
+                    locked[chat_idstr]["gif"] = "no"
+                    locked[chat_idstr]["flood"] = "no"
+                    locked[chat_idstr]["arabic"] = "yes"
+                if len(args) > 0:
+                    if args[0] == "sticker":
+                        if locked[chat_idstr]["sticker"] != "yes":
+                            locked[chat_idstr]["sticker"] = "yes"
+                            lockedmsg = "Stickers are now locked"
+                        else:
+                            lockedmsg = "Stickers are already locked"
+                    if args[0] == "flood":
+                        if locked[chat_idstr]["flood"] != "yes":
+                            locked[chat_idstr]["flood"] = "yes"
+                            lockedmsg = "Flooding is now locked"
+                        else:
+                            lockedmsg = "Flooding is already locked"
+                    if args[0] == "arabic" or args[0] == "Arabic":
+                        if locked[chat_idstr]["arabic"] != "yes":
+                            locked[chat_idstr]["arabic"] = "yes"
+                            lockedmsg = "Arabic is now locked"
+                        else:
+                            lockedmsg = "Arabic is already locked"
+                else:
+                    lockedmsg = "/lock 'setting', not just /lock"
+                if len(args) > 1:
+                    lockedmsg = "Please only lock one setting at a time. Don't go power crazy"
+                if lockedmsg:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text=lockedmsg)
+                else:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text="Something went wrong.")
+                dumpjson("locked.json", locked)
             else:
                 bot.sendMessage(chat_id=update.message.chat_id,
-                                text="You cannot provide an empty changelog.",
-                                parse_mode="Markdown")
-
-def repopick(bot, update, args):
-        if update.message.from_user.id == int(config['ADMIN']['id']):
-            global rpick
-            user = update.message.from_user
-
-            str_args = ' '.join(args)
-            if str_args != "":
-                update.message.reply_text('I will pick changes: ' + "'" + str_args + "'")
-                rpicks = '%20'.join(args)
-                rpick = rpicks
-                print ("Repopick set to" + "'" + rpick + "'")
-            else:
-                keyboard = [[InlineKeyboardButton("ON", callback_data='repopickon')],
-
-                            [InlineKeyboardButton("OFF", callback_data='repopickoff')]]
-
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                update.message.reply_text('Turn repopick ON or OFF:', reply_markup=reply_markup)
-
-def button(bot, update, direct=True):
-        user_id = update.callback_query.from_user.id
-        if user_id == int(config['ADMIN']['id']):
-            query = update.callback_query
-
-            selected_button = query.data
-            global cleanparam
-            global syncparam
-            global repopickstatus
-            if selected_button == 'buildWithParameters':
-                bot.editMessageText(text="Selected option: With Paramaters",
-                                    chat_id=query.message.chat_id,
-                                    message_id=query.message.message_id)
-                buildwithparams(bot, update, query)
-            if selected_button == 'build':
-                bot.editMessageText(text="Selected option: Without Paramaters",
-                                    chat_id=query.message.chat_id,
-                                    message_id=query.message.message_id)
-                buildwithoutparams(bot, update, query)
-            if selected_button == 'syncon':
-                bot.editMessageText(text="Selected option: YES",
-                                    chat_id=query.message.chat_id,
-                                    message_id=query.message.message_id)
-                syncparam = "true"
-                bot.sendMessage(chat_id=query.message.chat_id,
-                                text="Sync set to true",
-                                parse_mode="Markdown")
-            if selected_button == 'syncoff':
-                bot.editMessageText(text="Selected option: NO",
-                                    chat_id=query.message.chat_id,
-                                    message_id=query.message.message_id)
-                syncparam = "false"
-                bot.sendMessage(chat_id=query.message.chat_id,
-                                text="Sync set to false",
-                                parse_mode="Markdown")
-            if selected_button == 'cleanon':
-                bot.editMessageText(text="Selected option: YES",
-                                    chat_id=query.message.chat_id,
-                                    message_id=query.message.message_id)
-                cleanparam = "true"
-                bot.sendMessage(chat_id=query.message.chat_id,
-                                text="Clean set to true",
-                                parse_mode="Markdown")
-            if selected_button == 'cleanoff':
-                bot.editMessageText(text="Selected option: NO",
-                                    chat_id=query.message.chat_id,
-                                    message_id=query.message.message_id)
-                cleanparam = "false"
-                bot.sendMessage(chat_id=query.message.chat_id,
-                                text="Clean set to false",
-                                parse_mode="Markdown")
-            if selected_button == 'repopickon':
-                bot.editMessageText(text="Selected option: ON",
-                                    chat_id=query.message.chat_id,
-                                    message_id=query.message.message_id)
-                repopickstatus = "true"
-                bot.sendMessage(chat_id=query.message.chat_id,
-                                text="repopick set to ON",
-                                parse_mode="Markdown")
-            if selected_button == 'repopickoff':
-                bot.editMessageText(text="Selected option: OFF",
-                                    chat_id=query.message.chat_id,
-                                    message_id=query.message.message_id)
-                repopickstatus = "false"
-                bot.sendMessage(chat_id=query.message.chat_id,
-                                text="repopick set to OFF",
-                                parse_mode="Markdown")
+                                text="Only mods can do stuff like that!")
         else:
-                bot.sendMessage(chat_id=query.message.chat_id,
-                                text="You trying to spam me bro?",
-                                parse_mode="Markdown")
-        return False
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+    else:
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
 
-def inlinequery(bot, update):
-    query = update.inline_query.query
-    o = execute(query, update, direct=False)
-    results = list()
 
-    results.append(InlineQueryResultArticle(id=uuid4(),
-                                            title=query,
-                                            description=o,
-                                            input_message_content=InputTextMessageContent(
-                                            '*{0}*\n\n{1}'.format(query, o),
-                                            parse_mode="Markdown")))
+def unlockme(bot, update, args):
+    if bot.id in get_admin_ids(bot, update.message.chat_id):
+        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+        moderated = loadjson('./moderated.json', "moderated.json")
+        if chat_idstr in moderated:
+            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
+                global locked
+                lockedmsg = ""
+                locked = loadjson('./locked.json', "locked.json")
+                if chat_idstr not in locked.keys():
+                    locked[chat_idstr] = {}
+                    locked[chat_idstr]["sticker"] = "no"
+                    locked[chat_idstr]["gif"] = "no"
+                    locked[chat_idstr]["flood"] = "no"
+                    locked[chat_idstr]["arabic"] = "yes"
+                if len(args) > 0:
+                    if args[0] == "sticker":
+                        if locked[chat_idstr]["sticker"] != "no":
+                            locked[chat_idstr]["sticker"] = "no"
+                            lockedmsg = "Stickers are now unlocked"
+                        else:
+                            lockedmsg = "Stickers are already unlocked"
+                    if args[0] == "flood":
+                        if locked[chat_idstr]["flood"] != "no":
+                            locked[chat_idstr]["flood"] = "no"
+                            lockedmsg = "Flooding is now unlocked"
+                        else:
+                            lockedmsg = "Flooding is already unlocked"
+                    if args[0] == "arabic" or args[0] == "Arabic":
+                        if locked[chat_idstr]["arabic"] != "no":
+                            locked[chat_idstr]["arabic"] = "no"
+                            lockedmsg = "Arabic is now unlocked"
+                        else:
+                            lockedmsg = "Arabic is already unlocked"
+                else:
+                    lockedmsg = "/unlock 'setting', not just /unlock"
+                if len(args) > 1:
+                    lockedmsg = "Please only unlock one setting at a time. Don't give them too much freedom"
+                if lockedmsg:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text=lockedmsg)
+                else:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text="Something went wrong.")
+                dumpjson("locked.json", locked)
+            else:
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text="Only mods can do stuff like that!")
+        else:
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+    else:
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
 
-    bot.answerInlineQuery(update.inline_query.id, results=results, cache_time=10)
 
-if jenkinsconfig == "yes":
-    pickopen_handler = CommandHandler('pickopen', pickopen)
-    sync_handler = CommandHandler('sync', sync)
-    clean_handler = CommandHandler('clean', clean)
-    build_handler = CommandHandler('build', choosebuild)
-    repopick_handler = CommandHandler('repopick', repopick, pass_args=True)
-    changelog_handler = CommandHandler('changelog', changelog,  pass_args=True)
+def setflood(bot, update, args):
+    if bot.id in get_admin_ids(bot, update.message.chat_id):
+        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+        moderated = loadjson('./moderated.json', "moderated.json")
+        promoted = loadjson('./promoted.json', "promoted.json")
+
+        if chat_idstr in moderated:
+
+            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
+                flooding = loadjson('./flooding.json', "flooding.json")
+                limit = flooding[chat_idstr]["limit"]
+                intarg = int(args[0])
+                if isinstance(intarg, int):
+                    if intarg <= 10 and intarg >=5:
+                        flooding[chat_idstr]["limit"] = intarg
+                        bot.sendMessage(chat_id=update.message.chat_id,
+                                        text="Flood has been set to: " + str(intarg))
+                    else:
+                        bot.sendMessage(chat_id=update.message.chat_id,
+                                        text="The flood limit must be a number ≥ 5 and ≤ 10")   
+                else:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text="The flood limit must be a number ≥ 5 and ≤ 10")  
+            else:
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text="Only mods can do stuff like that!")
+        else:
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+    else:
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+                        
+def settings(bot, update):
+    chat_idstr = str(update.message.chat_id)
+    locked = loadjson('./locked.json', "locked.json")
+    flooding = loadjson('./flooding.json', "flooding.json")
+    if locked[chat_idstr]["sticker"] == "yes":
+        sticker = "Lock Sticker: Yes\n"
+    else:
+        sticker = "Lock Sticker: No\n"
+    if locked[chat_idstr]["flood"] == "yes":
+        limit = flooding[chat_idstr]["limit"]
+        flood = "Lock flood: Yes\nFlood sensitivity: " + str(limit) + "\n"
+    else:
+        flood = "Lock flood: No\n"
+    if locked[chat_idstr]["arabic"] == "yes":
+        arabic = "Lock Arabic: Yes\n"
+    else:
+        arabic = "Lock Arabic: No\n"
+    message = "Supergroup settings:\n" + sticker + flood + arabic
+    bot.sendMessage(chat_id=update.message.chat_id,
+                    text=message)
+    
 
 start_handler = CommandHandler('start', start)
-open_handler = CommandHandler('open', openchanges, pass_args=True)
 help_handler = CommandHandler('help', help_message, pass_args=True)
-link_handler = CommandHandler('link', link, pass_args=True)
 note_handler = CommandHandler('note', note, pass_args=True)
 time_handler = CommandHandler('time', time_command, pass_args=True)
+ban_handler = CommandHandler('ban', banme, pass_args=True)
+banall_handler = CommandHandler('banall', banall, pass_args=True)
+unban_handler = CommandHandler('unban', unbanme, pass_args=True)
+unbanall_handler = CommandHandler('unbanall', unbanall, pass_args=True)
+add_handler = CommandHandler('add', add)
+rem_handler = CommandHandler('rem', rem)
 kick_handler = CommandHandler('kick', kick_user, pass_args=True)
+promote_handler = CommandHandler('promote', promoteme, pass_args=True)
+demote_handler = CommandHandler('demote', demoteme, pass_args=True)
+modlist_handler = CommandHandler('modlist', modlist)
+save_handler = CommandHandler('save', save_message, pass_args=True)
+get_handler = CommandHandler('get', get_message, pass_args=True)
+lock_handler = CommandHandler('lock', lockme, pass_args=True)
+unlock_handler = CommandHandler('unlock', unlockme, pass_args=True)
+settings_handler = CommandHandler('settings', settings)
+setflood_handler = CommandHandler('setflood', setflood, pass_args=True)
 
-if jenkinsconfig == "yes":
-    dispatcher.add_handler(pickopen_handler)
-    dispatcher.add_handler(sync_handler)
-    dispatcher.add_handler(clean_handler)
-    dispatcher.add_handler(build_handler)
-    dispatcher.add_handler(repopick_handler)
-    dispatcher.add_handler(changelog_handler)
 
 dispatcher.add_handler(start_handler)
-dispatcher.add_handler(open_handler)
 dispatcher.add_handler(help_handler)
-dispatcher.add_handler(link_handler)
 dispatcher.add_handler(note_handler)
 dispatcher.add_handler(time_handler)
+dispatcher.add_handler(ban_handler)
+dispatcher.add_handler(banall_handler)
+dispatcher.add_handler(unban_handler)
+dispatcher.add_handler(unbanall_handler)
+dispatcher.add_handler(add_handler)
+dispatcher.add_handler(rem_handler)
 dispatcher.add_handler(kick_handler)
+dispatcher.add_handler(promote_handler)
+dispatcher.add_handler(demote_handler)
+dispatcher.add_handler(modlist_handler)
+dispatcher.add_handler(save_handler)
+dispatcher.add_handler(get_handler)
+dispatcher.add_handler(lock_handler)
+dispatcher.add_handler(unlock_handler)
+dispatcher.add_handler(settings_handler)
+dispatcher.add_handler(setflood_handler)
+dispatcher.add_handler(MessageHandler([Filters.all], floodcheck))
+dispatcher.add_handler(MessageHandler([Filters.all], receiveLocked))
 dispatcher.add_handler(MessageHandler([Filters.all], receiveMessage))
-dispatcher.add_handler(CallbackQueryHandler(button))
-dispatcher.add_handler(InlineQueryHandler(inlinequery))
+
 dispatcher.add_error_handler(error)
 
 updater.start_polling()
