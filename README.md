@@ -1,12 +1,12 @@
-# [ReviewBot](https://telegram.me/ReviewBot)
+# [BruhhBot](https://telegram.me/bruhhBot)
 
-With JenkinsBot, you can run commands on your server from Telegram. *It's fast and simple, but might not be secure*.
+With BruhhBot, you can manage your supergroup using an opensource, maintained bot with the telegram bot API v2.
 
-To get started, edit the `bot.ini` file with your favourite text editor to use your bot token and user ID (not username).
+To get started, edit the `bot.ini` file with your favourite text editor to setup all the different variables needed to run the bot correctly.
 
 ## Setup
 
-Install needed dependencies using pip
+Install needed dependencies using pip3
 
 ```
     pip3 install -r requirements.txt
