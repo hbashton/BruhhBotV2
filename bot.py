@@ -345,18 +345,7 @@ def receiveMessage(bot, update):
                 olduser = idbase[chat_idstr][tgid]
                 if olduser != tguser:
                     idbase[chat_idstr][tgid] = tguser
-    if update.message.forward_from:
-        tguser = str(update.message.forward_from["username"]).lower()
-        tgid = str(update.message.forward_from["id"])
-        if chat_idstr not in idbase.keys():
-            idbase[chat_idstr] = {}
-        if tgid not in idbase[chat_idstr].keys():
-            idbase[chat_idstr][tgid] = tguser
-        else:
-            olduser = idbase[chat_idstr][tgid]
-            if olduser != tguser:
-                idbase[chat_idstr][tgid] = tguser
-    print(update.message)
+                
     dumpjson("idbase.json", idbase)
     dumpjson("banbase.json", banbase)
     dumpjson("promoted.json", promoted)
@@ -411,6 +400,9 @@ def floodcheck(bot, update):
                 flooding[chat_idstr]["limit"] = 5
                 flooding[chat_idstr]["floodmember"] = fromidstr
                 flooding[chat_idstr]["floodcount"] = 1
+            if chat_idstr not in locked.keys():
+                locked[chat_idstr] = {}
+                locked[chat_idstr]["flood"] = "no"
             if update.message:
                 if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) != "true":
                     if locked[chat_idstr]["flood"] == "yes":
@@ -422,7 +414,7 @@ def floodcheck(bot, update):
                             else:
                                 if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) != "true":
                                     promoted = loadjson('./promoted.json', "promoted.json")
-                                    if promoted[chat_idstr]:
+                                    if chat_idstr in promoted.keys():
                                         if fromid not in promoted[chat_idstr]["mods"]:
                                             bot.sendMessage(chat_id=update.message.chat_id,
                                                             text="Flooding is not allowed here.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked")
@@ -449,7 +441,7 @@ def modlist(bot, update):
             idbase = loadjson('./idbase.json', "idbase.json")
 
             if chat_idstr in moderated:
-                if promoted[chat_idstr]:
+                if chat_idstr in promoted.keys():
                     for user in promoted[chat_idstr]:
                         for userid, username in idbase[chat_idstr].items():
                             if str(user) == userid:
@@ -475,329 +467,347 @@ def modlist(bot, update):
                             text="I'm not an admin! Please make me one, otherwise I can't do anything!")
     else:
         bot.sendMessage(chat_id=update.message.chat_id,
-                        text="I only work with groups! Sorry pal")
+                        text="You're the only mod here ;)")
                         
 def promoteme(bot, update, args):
-    if bot.id in get_admin_ids(bot, update.message.chat_id):
-        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
-        moderated = loadjson('./moderated.json', "moderated.json")
-        if chat_idstr in moderated:
-            if get_user_info(bot, chat_id, fromid, "", "status") == "creator":
-                global idbase
-                global promoted
-                
-                promoted = loadjson('./promoted.json', "promoted.json")
-                idbase = loadjson('./idbase.json', "idbase.json")
-                
-                str_args = ' '.join(args)
-                if "@" in str_args:
-                    promoteuser = str_args.replace("@", "").lower()
-                    for tg_id, tg_user in idbase[chat_idstr].items():
-                        if tg_user == promoteuser:
-                            user_id = tg_id
-                    try:
-                        user_id
-                    except NameError:
-                        user_id = ""
-                        bot.sendMessage(chat_id=update.message.chat_id,
-                                        text="I don't know anyone by that name!")
-                    if chat_idstr not in promoted.keys():
-                        promoted[chat_idstr] = []
-                    if user_id:
-                        promoteuser = str_args.replace("@", "")
-                        if promoted[chat_idstr]:
-                            if user_id not in promoted[chat_idstr]:
-                                promoted[chat_idstr] = promoted[chat_idstr] + [user_id]
+    if update.message.chat.type != "private":
+    
+        if bot.id in get_admin_ids(bot, update.message.chat_id):
+            chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+            moderated = loadjson('./moderated.json', "moderated.json")
+            if chat_idstr in moderated:
+                if get_user_info(bot, chat_id, fromid, "", "status") == "creator":
+                    global idbase
+                    global promoted
+                    
+                    promoted = loadjson('./promoted.json', "promoted.json")
+                    idbase = loadjson('./idbase.json', "idbase.json")
+                    
+                    str_args = ' '.join(args)
+                    if "@" in str_args:
+                        promoteuser = str_args.replace("@", "").lower()
+                        for tg_id, tg_user in idbase[chat_idstr].items():
+                            if tg_user == promoteuser:
+                                user_id = tg_id
+                        try:
+                            user_id
+                        except NameError:
+                            user_id = ""
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="I don't know anyone by that name!")
+                        if chat_idstr not in promoted.keys():
+                            promoted[chat_idstr] = []
+                        if user_id:
+                            promoteuser = str_args.replace("@", "")
+                            if chat_idstr in promoted.keys():
+                                if user_id not in promoted[chat_idstr]:
+                                    promoted[chat_idstr] = promoted[chat_idstr] + [user_id]
+                                    bot.sendMessage(chat_id=update.message.chat_id,
+                                                    text="User @" + promoteuser + " is now a mod of " + update.message.chat.title + "! Congratulations!")
+                                else:
+                                    bot.sendMessage(chat_id=update.message.chat_id,
+                                                    text="User @" + promoteuser + " is already a moderator.")
+                            else:
+                                promoted[chat_idstr] = []
+                                promoted[chat_idstr] = [user_id]
                                 bot.sendMessage(chat_id=update.message.chat_id,
                                                 text="User @" + promoteuser + " is now a mod of " + update.message.chat.title + "! Congratulations!")
-                            else:
-                                bot.sendMessage(chat_id=update.message.chat_id,
-                                                text="User @" + promoteuser + " is already a moderator.")
-                        else:
-                            promoted[chat_idstr] = []
-                            promoted[chat_idstr] = [user_id]
-                            bot.sendMessage(chat_id=update.message.chat_id,
-                                            text="User @" + promoteuser + " is now a mod of " + update.message.chat.title + "! Congratulations!")
-        
+            
+                    else:
+                        bot.sendMessage(chat_id=update.message.chat_id,
+                                        text="You can ban promote someone with /promote @username")
+                                        
+                    dumpjson("promoted.json", promoted)
+    
                 else:
                     bot.sendMessage(chat_id=update.message.chat_id,
-                                    text="You can ban promote someone with /promote @username")
-                                    
-                dumpjson("promoted.json", promoted)
-
+                                    text="Only the creator can do stuff like that!")
             else:
                 bot.sendMessage(chat_id=update.message.chat_id,
-                                text="Only the creator can do stuff like that!")
+                                text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+    
         else:
             bot.sendMessage(chat_id=update.message.chat_id,
-                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
-
+                            text="I'm not an admin! Please make me one, otherwise I can't do anything!")
     else:
         bot.sendMessage(chat_id=update.message.chat_id,
-                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+                        text="You can only promote someone in groups")
 
 def demoteme(bot, update, args):
-    if bot.id in get_admin_ids(bot, update.message.chat_id):
-        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
-        moderated = loadjson('./moderated.json', "moderated.json")
-        if chat_idstr in moderated:
-            if get_user_info(bot, chat_id, fromid, "", "status") == "creator":
-                global idbase
-                global promoted
-            
-                promoted = loadjson('./promoted.json', "promoted.json")
-                idbase = loadjson('./idbase.json', "idbase.json")
-                    
-                str_args = ' '.join(args)
-                if "@" in str_args:
-                    demoteuser = str_args.replace("@", "").lower()
-                    for tg_id, tg_user in idbase[chat_idstr].items():
-                        if tg_user == demoteuser:
-                            user_id = tg_id
-                    try:
-                        user_id
-                    except NameError:
-                        user_id = ""
-                        bot.sendMessage(chat_id=update.message.chat_id,
-                                        text="I don't know anyone by that name! *hint* they must say something for me to get to know them!")
-                    if chat_idstr not in promoted.keys():
-                            promoted[chat_idstr] = []
-                    if user_id:
-                        if promoted[chat_idstr]:
-                            if user_id in promoted[chat_idstr]:
-                                demoteuser = str_args.replace("@", "")
-                                promoted[chat_idstr] = promoted[chat_idstr].remove(user_id)
-                                bot.sendMessage(chat_id=update.message.chat_id,
-                                                text="User @" + demoteuser + " is no longer a moderator of " + update.message.chat.title + " :(")
+    if update.message.chat.type != "private":
+    
+        if bot.id in get_admin_ids(bot, update.message.chat_id):
+            chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+            moderated = loadjson('./moderated.json', "moderated.json")
+            if chat_idstr in moderated:
+                if get_user_info(bot, chat_id, fromid, "", "status") == "creator":
+                    global idbase
+                    global promoted
+                
+                    promoted = loadjson('./promoted.json', "promoted.json")
+                    idbase = loadjson('./idbase.json', "idbase.json")
+                        
+                    str_args = ' '.join(args)
+                    if "@" in str_args:
+                        demoteuser = str_args.replace("@", "").lower()
+                        for tg_id, tg_user in idbase[chat_idstr].items():
+                            if tg_user == demoteuser:
+                                user_id = tg_id
+                        try:
+                            user_id
+                        except NameError:
+                            user_id = ""
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="I don't know anyone by that name! *hint* they must say something for me to get to know them!")
+                        if chat_idstr not in promoted.keys():
+                                promoted[chat_idstr] = []
+                        if user_id:
+                            if chat_idstr in promoted.keys():
+                                if user_id in promoted[chat_idstr]:
+                                    demoteuser = str_args.replace("@", "")
+                                    promoted[chat_idstr] = promoted[chat_idstr].remove(user_id)
+                                    bot.sendMessage(chat_id=update.message.chat_id,
+                                                    text="User @" + demoteuser + " is no longer a moderator of " + update.message.chat.title + " :(")
+                                else:
+                                    bot.sendMessage(chat_id=update.message.chat_id,
+                                                    text="User @" + demoteuser + " is not a moderator. Good thing, cause they were about to lose that anyway")
                             else:
                                 bot.sendMessage(chat_id=update.message.chat_id,
-                                                text="User @" + demoteuser + " is not a moderator. Good thing, cause they were about to lose that anyway")
-                        else:
-                            bot.sendMessage(chat_id=update.message.chat_id,
-                                            text="We don't even have any moderators.")
+                                                text="We don't even have any moderators.")
+                    else:
+                        bot.sendMessage(chat_id=update.message.chat_id,
+                                        text="You can demote someone with /demote @username")
+                    dumpjson("promoted.json", promoted)
+    
                 else:
                     bot.sendMessage(chat_id=update.message.chat_id,
-                                    text="You can demote someone with /demote @username")
-                dumpjson("promoted.json", promoted)
-
+                                    text="Only the creator can do stuff like that!")
             else:
                 bot.sendMessage(chat_id=update.message.chat_id,
-                                text="Only the creator can do stuff like that!")
-        else:
+                                text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+        else:                            
             bot.sendMessage(chat_id=update.message.chat_id,
-                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
-    else:                            
+                            text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+    else:
         bot.sendMessage(chat_id=update.message.chat_id,
-                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
-
+                        text="You can only demote someone in groups")
 
 def unbanme(bot, update, args):
-    if bot.id in get_admin_ids(bot, update.message.chat_id):
-        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
-        moderated = loadjson('./moderated.json', "moderated.json")
-        if chat_idstr in moderated:
-
-            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
-                global idbase
-                global banbase
-                
-                banbase = loadjson('./banbase.json', "banbase.json")
-                idbase = loadjson('./idbase.json', "idbase.json")
+    if update.message.chat.type != "private":
+    
+        if bot.id in get_admin_ids(bot, update.message.chat_id):
+            chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+            moderated = loadjson('./moderated.json', "moderated.json")
+            if chat_idstr in moderated:
+    
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
+                    global idbase
+                    global banbase
                     
-                str_args = ' '.join(args)
-                if "@" in str_args:
-                    unbanuser = str_args.replace("@", "").lower()
-                    for tg_id, tg_user in idbase[chat_idstr].items():
-                        if tg_user == unbanuser:
-                            user_id = tg_id
-                    try:
-                        user_id
-                    except NameError:
-                        user_id = ""
-                        bot.sendMessage(chat_id=update.message.chat_id,
-                                        text="I don't know anyone by that name!")
-                    if chat_idstr not in banbase.keys():
-                            banbase[chat_idstr] = []
-                    if user_id:
-                        if user_id in banbase[chat_idstr]:
-                            unbanuser = str_args.replace("@", "")
-                            banbase[chat_idstr].remove(user_id)
-                            bot.unbanChatMember(chat_id, user_id)
+                    banbase = loadjson('./banbase.json', "banbase.json")
+                    idbase = loadjson('./idbase.json', "idbase.json")
+                        
+                    str_args = ' '.join(args)
+                    if "@" in str_args:
+                        unbanuser = str_args.replace("@", "").lower()
+                        for tg_id, tg_user in idbase[chat_idstr].items():
+                            if tg_user == unbanuser:
+                                user_id = tg_id
+                        try:
+                            user_id
+                        except NameError:
+                            user_id = ""
                             bot.sendMessage(chat_id=update.message.chat_id,
-                                            text="User @" + unbanuser + " is welcome in " + update.message.chat.title + " once again :)")
-                        else:
-                            bot.sendMessage(chat_id=update.message.chat_id,
-                                            text="User @" + unbanuser + " is not banned from this chat. Maybe you meant someone else?")
-                else:
-                    bot.sendMessage(chat_id=update.message.chat_id,
-                                    text="You can unban someone with /unban @username")
-                dumpjson("banbase.json", banbase)
-            else:
-                bot.sendMessage(chat_id=update.message.chat_id,
-                                text="Only mods can do stuff like that!")
-        else:
-            bot.sendMessage(chat_id=update.message.chat_id,
-                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
-    else:
-        bot.sendMessage(chat_id=update.message.chat_id,
-                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
-          
-def unbanall(bot, update, args):
-    if bot.id in get_admin_ids(bot, update.message.chat_id):
-        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
-        moderated = loadjson('./moderated.json', "moderated.json")
-        if chat_idstr in moderated:
-            if owner_check(bot, chat_id, fromid) == "true":
-                global idbase
-                global banbase
-                
-                banbase = loadjson('./banbase.json', "banbase.json")
-                idbase = loadjson('./idbase.json', "idbase.json")
-                    
-                str_args = ' '.join(args)
-                if "@" in str_args:
-                    unbanuser = str_args.replace("@", "").lower()
-                    for tg_id, tg_user in idbase[chat_idstr].items():
-                        if tg_user == unbanuser:
-                            user_id = tg_id
-                    try:
-                        user_id
-                    except NameError:
-                        user_id = ""
-                        bot.sendMessage(chat_id=update.message.chat_id,
-                                        text="I don't know anyone by that name!")
-                    if user_id:
-                        if owner_admin_mod_check(bot, chat_id, chat_idstr, user_id) != "true":
-                            unbanuser = str_args.replace("@", "")
-                            for string, chat in moderated.items():
-                                bot.unbanChatMember(chat, user_id)
-                            if user_id in banbase["global"]:
-                                banbase["global"].remove(user_id)
+                                            text="I don't know anyone by that name!")
+                        if chat_idstr not in banbase.keys():
+                                banbase[chat_idstr] = []
+                        if user_id:
+                            if user_id in banbase[chat_idstr]:
+                                unbanuser = str_args.replace("@", "")
+                                banbase[chat_idstr].remove(user_id)
+                                bot.unbanChatMember(chat_id, user_id)
                                 bot.sendMessage(chat_id=update.message.chat_id,
-                                                text="User @" + unbanuser + " globally unbanned from all my chats!")
+                                                text="User @" + unbanuser + " is welcome in " + update.message.chat.title + " once again :)")
                             else:
                                 bot.sendMessage(chat_id=update.message.chat_id,
-                                                text="User @" + unbanuser + " is not globally banned!")
-                        else:
-                            bot.sendMessage(chat_id=update.message.chat_id,
-                                            text="You can't gban mods! &$%^# ")
-        
+                                                text="User @" + unbanuser + " is not banned from this chat. Maybe you meant someone else?")
+                    else:
+                        bot.sendMessage(chat_id=update.message.chat_id,
+                                        text="You can unban someone with /unban @username")
+                    dumpjson("banbase.json", banbase)
                 else:
                     bot.sendMessage(chat_id=update.message.chat_id,
-                                    text="You can global unban someone with /unbanall @username")
-                dumpjson("banbase.json", banbase)
+                                    text="Only mods can do stuff like that!")
             else:
                 bot.sendMessage(chat_id=update.message.chat_id,
-                                text="Only my owner can do stuff like that!")
+                                text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
         else:
             bot.sendMessage(chat_id=update.message.chat_id,
-                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
-    else:
-        bot.sendMessage(chat_id=update.message.chat_id,
-                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+                            text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+              
+def unbanall(bot, update, args):
+    if update.message.chat.type != "private":
+    
+        if bot.id in get_admin_ids(bot, update.message.chat_id):
+            chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+            moderated = loadjson('./moderated.json', "moderated.json")
+            if chat_idstr in moderated:
+                if owner_check(bot, chat_id, fromid) == "true":
+                    global idbase
+                    global banbase
+                    
+                    banbase = loadjson('./banbase.json', "banbase.json")
+                    idbase = loadjson('./idbase.json', "idbase.json")
+                        
+                    str_args = ' '.join(args)
+                    if "@" in str_args:
+                        unbanuser = str_args.replace("@", "").lower()
+                        for tg_id, tg_user in idbase[chat_idstr].items():
+                            if tg_user == unbanuser:
+                                user_id = tg_id
+                        try:
+                            user_id
+                        except NameError:
+                            user_id = ""
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="I don't know anyone by that name!")
+                        if user_id:
+                            if owner_admin_mod_check(bot, chat_id, chat_idstr, user_id) != "true":
+                                unbanuser = str_args.replace("@", "")
+                                for string, chat in moderated.items():
+                                    bot.unbanChatMember(chat, user_id)
+                                if user_id in banbase["global"]:
+                                    banbase["global"].remove(user_id)
+                                    bot.sendMessage(chat_id=update.message.chat_id,
+                                                    text="User @" + unbanuser + " globally unbanned from all my chats!")
+                                else:
+                                    bot.sendMessage(chat_id=update.message.chat_id,
+                                                    text="User @" + unbanuser + " is not globally banned!")
+                            else:
+                                bot.sendMessage(chat_id=update.message.chat_id,
+                                                text="You can't gban mods! &$%^# ")
+            
+                    else:
+                        bot.sendMessage(chat_id=update.message.chat_id,
+                                        text="You can global unban someone with /unbanall @username")
+                    dumpjson("banbase.json", banbase)
+                else:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text="Only my owner can do stuff like that!")
+            else:
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+        else:
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text="I'm not an admin! Please make me one, otherwise I can't do anything!")
                         
 def banall(bot, update, args):
-    if bot.id in get_admin_ids(bot, update.message.chat_id):
-        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
-        moderated = loadjson('./moderated.json', "moderated.json")
-        if chat_idstr in moderated:
-            if owner_check(bot, chat_id, fromid) == "true":
-                global idbase
-                global banbase
-                
-                banbase = loadjson('./banbase.json', "banbase.json")
-                idbase = loadjson('./idbase.json', "idbase.json")
-                
-                str_args = ' '.join(args)
-                if "@" in str_args:
-                    banuser = str_args.replace("@", "").lower()
-                    for tg_id, tg_user in idbase[chat_idstr].items():
-                        if tg_user == banuser:
-                            user_id = tg_id
-                    try:
-                        user_id
-                    except NameError:
-                        user_id = ""
+    if update.message.chat.type != "private":
+
+        if bot.id in get_admin_ids(bot, update.message.chat_id):
+            chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+            moderated = loadjson('./moderated.json', "moderated.json")
+            if chat_idstr in moderated:
+                if owner_check(bot, chat_id, fromid) == "true":
+                    global idbase
+                    global banbase
+                    
+                    banbase = loadjson('./banbase.json', "banbase.json")
+                    idbase = loadjson('./idbase.json', "idbase.json")
+                    
+                    str_args = ' '.join(args)
+                    if "@" in str_args:
+                        banuser = str_args.replace("@", "").lower()
+                        for tg_id, tg_user in idbase[chat_idstr].items():
+                            if tg_user == banuser:
+                                user_id = tg_id
+                        try:
+                            user_id
+                        except NameError:
+                            user_id = ""
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="I don't know anyone by that name!")
+                        if user_id:
+                            if owner_admin_mod_check(bot, chat_id, chat_idstr, user_id) != "true":
+                                banuser = str_args.replace("@", "")
+                                for string, chat in moderated.items():
+                                    bot.kickChatMember(chat, user_id)
+                                banbase["global"] = banbase["global"] + [user_id]
+                                bot.sendMessage(chat_id=update.message.chat_id,
+                                                text="User @" + banuser + " globally banned from all my chats!")
+                            else:
+                                bot.sendMessage(chat_id=update.message.chat_id,
+                                                text="You can't gban mods! &$%^# ")
+            
+                    else:
                         bot.sendMessage(chat_id=update.message.chat_id,
-                                        text="I don't know anyone by that name!")
-                    if user_id:
-                        if owner_admin_mod_check(bot, chat_id, chat_idstr, user_id) != "true":
-                            banuser = str_args.replace("@", "")
-                            for string, chat in moderated.items():
-                                bot.kickChatMember(chat, user_id)
-                            banbase["global"] = banbase["global"] + [user_id]
-                            bot.sendMessage(chat_id=update.message.chat_id,
-                                            text="User @" + banuser + " globally banned from all my chats!")
-                        else:
-                            bot.sendMessage(chat_id=update.message.chat_id,
-                                            text="You can't gban mods! &$%^# ")
-        
+                                        text="You can global ban someone with /banall @username")
+                    dumpjson("banbase.json", banbase)
                 else:
                     bot.sendMessage(chat_id=update.message.chat_id,
-                                    text="You can global ban someone with /banall @username")
-                dumpjson("banbase.json", banbase)
+                                    text="Only my owner can do stuff like that!")
             else:
                 bot.sendMessage(chat_id=update.message.chat_id,
-                                text="Only my owner can do stuff like that!")
+                                text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
         else:
             bot.sendMessage(chat_id=update.message.chat_id,
-                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
-    else:
-        bot.sendMessage(chat_id=update.message.chat_id,
-                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+                            text="I'm not an admin! Please make me one, otherwise I can't do anything!")
         
 
 def banme(bot, update, args):
-    if bot.id in get_admin_ids(bot, update.message.chat_id):
-        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
-        moderated = loadjson('./moderated.json', "moderated.json")
-        if chat_idstr in moderated:
-            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
-                global idbase
-                global banbase
-                
-                banbase = loadjson('./banbase.json', "banbase.json")
-                idbase = loadjson('./idbase.json', "idbase.json")
+    if update.message.chat.type != "private":
+
+        if bot.id in get_admin_ids(bot, update.message.chat_id):
+            chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+            moderated = loadjson('./moderated.json', "moderated.json")
+            if chat_idstr in moderated:
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
+                    global idbase
+                    global banbase
                     
-                str_args = ' '.join(args)
-                if "@" in str_args:
-                    banuser = str_args.replace("@", "").lower()
-                    for tg_id, tg_user in idbase[chat_idstr].items():
-                        if tg_user == banuser:
-                            user_id = tg_id
-                    try:
-                        user_id
-                    except NameError:
-                        user_id = ""
+                    banbase = loadjson('./banbase.json', "banbase.json")
+                    idbase = loadjson('./idbase.json', "idbase.json")
+                        
+                    str_args = ' '.join(args)
+                    if "@" in str_args:
+                        banuser = str_args.replace("@", "").lower()
+                        for tg_id, tg_user in idbase[chat_idstr].items():
+                            if tg_user == banuser:
+                                user_id = tg_id
+                        try:
+                            user_id
+                        except NameError:
+                            user_id = ""
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="I don't know anyone by that name!")
+                        if chat_idstr not in banbase.keys():
+                            banbase[chat_idstr] = []
+                        if user_id:
+                            if owner_admin_mod_check(bot, chat_id, chat_idstr, user_id) != "true":
+                                banuser = str_args.replace("@", "")
+                                bot.kickChatMember(chat_id, user_id)
+                                banbase[chat_idstr] = banbase[chat_idstr] + [user_id]
+                                bot.sendMessage(chat_id=update.message.chat_id,
+                                                text="User @" + banuser + " banned from " + update.message.chat.title + " :(")
+                            else:
+                                bot.sendMessage(chat_id=update.message.chat_id,
+                                                text="You can't ban mods! &$%^# ")
+            
+                    else:
                         bot.sendMessage(chat_id=update.message.chat_id,
-                                        text="I don't know anyone by that name!")
-                    if chat_idstr not in banbase.keys():
-                        banbase[chat_idstr] = []
-                    if user_id:
-                        if owner_admin_mod_check(bot, chat_id, chat_idstr, user_id) != "true":
-                            banuser = str_args.replace("@", "")
-                            bot.kickChatMember(chat_id, user_id)
-                            banbase[chat_idstr] = banbase[chat_idstr] + [user_id]
-                            bot.sendMessage(chat_id=update.message.chat_id,
-                                            text="User @" + banuser + " banned from " + update.message.chat.title + " :(")
-                        else:
-                            bot.sendMessage(chat_id=update.message.chat_id,
-                                            text="You can't ban mods! &$%^# ")
-        
+                                        text="You can ban someone with /ban @username")
+                    dumpjson("banbase.json", banbase)
                 else:
                     bot.sendMessage(chat_id=update.message.chat_id,
-                                    text="You can ban someone with /ban @username")
-                dumpjson("banbase.json", banbase)
+                                    text="Only mods can do stuff like that!")
             else:
                 bot.sendMessage(chat_id=update.message.chat_id,
-                                text="Only mods can do stuff like that!")
+                                text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
         else:
             bot.sendMessage(chat_id=update.message.chat_id,
-                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
-    else:
-        bot.sendMessage(chat_id=update.message.chat_id,
-                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
-        
+                            text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+    
+            
 def kick_user(bot, update, args):
     if bot.id in get_admin_ids(bot, update.message.chat_id):
         chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
@@ -1098,7 +1108,7 @@ def save_message(bot, update, args):
         saves = "something went wrong"
     bot.sendMessage(chat_id=update.message.chat_id,
                     text=saves)
-    jsondump("saved.json", saved)
+    dumpjson("saved.json", saved)
 
 def get_message(bot, update, args):
     global saved
@@ -1125,149 +1135,163 @@ def get_message(bot, update, args):
                     text=getme)
                     
 def lockme(bot, update, args):
-    if bot.id in get_admin_ids(bot, update.message.chat_id):
-        global locked
-        lockedmsg = ""
-        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
-        moderated = loadjson('./moderated.json', "moderated.json")
-        if chat_idstr in moderated:
-            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
-                locked = loadjson('./locked.json', "locked.json")
-                if chat_idstr not in locked.keys():
-                    locked[chat_idstr] = {}
-                    locked[chat_idstr]["sticker"] = "no"
-                    locked[chat_idstr]["gif"] = "no"
-                    locked[chat_idstr]["flood"] = "no"
-                    locked[chat_idstr]["arabic"] = "yes"
-                if len(args) > 0:
-                    if args[0] == "sticker":
-                        if locked[chat_idstr]["sticker"] != "yes":
-                            locked[chat_idstr]["sticker"] = "yes"
-                            lockedmsg = "Stickers are now locked"
-                        else:
-                            lockedmsg = "Stickers are already locked"
-                    if args[0] == "flood":
-                        if locked[chat_idstr]["flood"] != "yes":
-                            locked[chat_idstr]["flood"] = "yes"
-                            lockedmsg = "Flooding is now locked"
-                        else:
-                            lockedmsg = "Flooding is already locked"
-                    if args[0] == "arabic" or args[0] == "Arabic":
-                        if locked[chat_idstr]["arabic"] != "yes":
-                            locked[chat_idstr]["arabic"] = "yes"
-                            lockedmsg = "Arabic is now locked"
-                        else:
-                            lockedmsg = "Arabic is already locked"
+    if update.message.chat.type != "private":
+    
+        if bot.id in get_admin_ids(bot, update.message.chat_id):
+            global locked
+            lockedmsg = ""
+            chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+            moderated = loadjson('./moderated.json', "moderated.json")
+            if chat_idstr in moderated:
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
+                    locked = loadjson('./locked.json', "locked.json")
+                    if chat_idstr not in locked.keys():
+                        locked[chat_idstr] = {}
+                        locked[chat_idstr]["sticker"] = "no"
+                        locked[chat_idstr]["gif"] = "no"
+                        locked[chat_idstr]["flood"] = "no"
+                        locked[chat_idstr]["arabic"] = "yes"
+                    if len(args) > 0:
+                        if args[0] == "sticker":
+                            if locked[chat_idstr]["sticker"] != "yes":
+                                locked[chat_idstr]["sticker"] = "yes"
+                                lockedmsg = "Stickers are now locked"
+                            else:
+                                lockedmsg = "Stickers are already locked"
+                        if args[0] == "flood":
+                            if locked[chat_idstr]["flood"] != "yes":
+                                locked[chat_idstr]["flood"] = "yes"
+                                lockedmsg = "Flooding is now locked"
+                            else:
+                                lockedmsg = "Flooding is already locked"
+                        if args[0] == "arabic" or args[0] == "Arabic":
+                            if locked[chat_idstr]["arabic"] != "yes":
+                                locked[chat_idstr]["arabic"] = "yes"
+                                lockedmsg = "Arabic is now locked"
+                            else:
+                                lockedmsg = "Arabic is already locked"
+                    else:
+                        lockedmsg = "/lock 'setting', not just /lock"
+                    if len(args) > 1:
+                        lockedmsg = "Please only lock one setting at a time. Don't go power crazy"
+                    if lockedmsg:
+                        bot.sendMessage(chat_id=update.message.chat_id,
+                                        text=lockedmsg)
+                    else:
+                        bot.sendMessage(chat_id=update.message.chat_id,
+                                        text="Something went wrong.")
+                    dumpjson("locked.json", locked)
                 else:
-                    lockedmsg = "/lock 'setting', not just /lock"
-                if len(args) > 1:
-                    lockedmsg = "Please only lock one setting at a time. Don't go power crazy"
-                if lockedmsg:
                     bot.sendMessage(chat_id=update.message.chat_id,
-                                    text=lockedmsg)
-                else:
-                    bot.sendMessage(chat_id=update.message.chat_id,
-                                    text="Something went wrong.")
-                dumpjson("locked.json", locked)
+                                    text="Only mods can do stuff like that!")
             else:
                 bot.sendMessage(chat_id=update.message.chat_id,
-                                text="Only mods can do stuff like that!")
+                                text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
         else:
             bot.sendMessage(chat_id=update.message.chat_id,
-                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+                            text="I'm not an admin! Please make me one, otherwise I can't do anything!")
     else:
         bot.sendMessage(chat_id=update.message.chat_id,
-                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+                        text="Locking settings is for groups!")
 
 
 def unlockme(bot, update, args):
-    if bot.id in get_admin_ids(bot, update.message.chat_id):
-        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
-        moderated = loadjson('./moderated.json', "moderated.json")
-        if chat_idstr in moderated:
-            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
-                global locked
-                lockedmsg = ""
-                locked = loadjson('./locked.json', "locked.json")
-                if chat_idstr not in locked.keys():
-                    locked[chat_idstr] = {}
-                    locked[chat_idstr]["sticker"] = "no"
-                    locked[chat_idstr]["gif"] = "no"
-                    locked[chat_idstr]["flood"] = "no"
-                    locked[chat_idstr]["arabic"] = "yes"
-                if len(args) > 0:
-                    if args[0] == "sticker":
-                        if locked[chat_idstr]["sticker"] != "no":
-                            locked[chat_idstr]["sticker"] = "no"
-                            lockedmsg = "Stickers are now unlocked"
-                        else:
-                            lockedmsg = "Stickers are already unlocked"
-                    if args[0] == "flood":
-                        if locked[chat_idstr]["flood"] != "no":
-                            locked[chat_idstr]["flood"] = "no"
-                            lockedmsg = "Flooding is now unlocked"
-                        else:
-                            lockedmsg = "Flooding is already unlocked"
-                    if args[0] == "arabic" or args[0] == "Arabic":
-                        if locked[chat_idstr]["arabic"] != "no":
-                            locked[chat_idstr]["arabic"] = "no"
-                            lockedmsg = "Arabic is now unlocked"
-                        else:
-                            lockedmsg = "Arabic is already unlocked"
-                else:
-                    lockedmsg = "/unlock 'setting', not just /unlock"
-                if len(args) > 1:
-                    lockedmsg = "Please only unlock one setting at a time. Don't give them too much freedom"
-                if lockedmsg:
-                    bot.sendMessage(chat_id=update.message.chat_id,
-                                    text=lockedmsg)
-                else:
-                    bot.sendMessage(chat_id=update.message.chat_id,
-                                    text="Something went wrong.")
-                dumpjson("locked.json", locked)
-            else:
-                bot.sendMessage(chat_id=update.message.chat_id,
-                                text="Only mods can do stuff like that!")
-        else:
-            bot.sendMessage(chat_id=update.message.chat_id,
-                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
-    else:
-        bot.sendMessage(chat_id=update.message.chat_id,
-                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+    if update.message.chat.type != "private":
 
-
-def setflood(bot, update, args):
-    if bot.id in get_admin_ids(bot, update.message.chat_id):
-        chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
-        moderated = loadjson('./moderated.json', "moderated.json")
-        promoted = loadjson('./promoted.json', "promoted.json")
-
-        if chat_idstr in moderated:
-
-            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
-                flooding = loadjson('./flooding.json', "flooding.json")
-                limit = flooding[chat_idstr]["limit"]
-                intarg = int(args[0])
-                if isinstance(intarg, int):
-                    if intarg <= 10 and intarg >=5:
-                        flooding[chat_idstr]["limit"] = intarg
+        if bot.id in get_admin_ids(bot, update.message.chat_id):
+            chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+            moderated = loadjson('./moderated.json', "moderated.json")
+            if chat_idstr in moderated:
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
+                    global locked
+                    lockedmsg = ""
+                    locked = loadjson('./locked.json', "locked.json")
+                    if chat_idstr not in locked.keys():
+                        locked[chat_idstr] = {}
+                        locked[chat_idstr]["sticker"] = "no"
+                        locked[chat_idstr]["gif"] = "no"
+                        locked[chat_idstr]["flood"] = "no"
+                        locked[chat_idstr]["arabic"] = "yes"
+                    if len(args) > 0:
+                        if args[0] == "sticker":
+                            if locked[chat_idstr]["sticker"] != "no":
+                                locked[chat_idstr]["sticker"] = "no"
+                                lockedmsg = "Stickers are now unlocked"
+                            else:
+                                lockedmsg = "Stickers are already unlocked"
+                        if args[0] == "flood":
+                            if locked[chat_idstr]["flood"] != "no":
+                                locked[chat_idstr]["flood"] = "no"
+                                lockedmsg = "Flooding is now unlocked"
+                            else:
+                                lockedmsg = "Flooding is already unlocked"
+                        if args[0] == "arabic" or args[0] == "Arabic":
+                            if locked[chat_idstr]["arabic"] != "no":
+                                locked[chat_idstr]["arabic"] = "no"
+                                lockedmsg = "Arabic is now unlocked"
+                            else:
+                                lockedmsg = "Arabic is already unlocked"
+                    else:
+                        lockedmsg = "/unlock 'setting', not just /unlock"
+                    if len(args) > 1:
+                        lockedmsg = "Please only unlock one setting at a time. Don't give them too much freedom"
+                    if lockedmsg:
                         bot.sendMessage(chat_id=update.message.chat_id,
-                                        text="Flood has been set to: " + str(intarg))
+                                        text=lockedmsg)
                     else:
                         bot.sendMessage(chat_id=update.message.chat_id,
-                                        text="The flood limit must be a number ≥ 5 and ≤ 10")   
+                                        text="Something went wrong.")
+                    dumpjson("locked.json", locked)
                 else:
                     bot.sendMessage(chat_id=update.message.chat_id,
-                                    text="The flood limit must be a number ≥ 5 and ≤ 10")  
+                                    text="Only mods can do stuff like that!")
             else:
                 bot.sendMessage(chat_id=update.message.chat_id,
-                                text="Only mods can do stuff like that!")
+                                text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
         else:
             bot.sendMessage(chat_id=update.message.chat_id,
-                            text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+                            text="I'm not an admin! Please make me one, otherwise I can't do anything!")
     else:
         bot.sendMessage(chat_id=update.message.chat_id,
-                        text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+                        text="Unlocking settings is for groups!")
+
+def setflood(bot, update, args):
+    if update.message.chat.type != "private":
+
+        if bot.id in get_admin_ids(bot, update.message.chat_id):
+            chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+            moderated = loadjson('./moderated.json', "moderated.json")
+            promoted = loadjson('./promoted.json', "promoted.json")
+    
+            if chat_idstr in moderated:
+    
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
+                    flooding = loadjson('./flooding.json', "flooding.json")
+                    limit = flooding[chat_idstr]["limit"]
+                    intarg = int(args[0])
+                    if isinstance(intarg, int):
+                        if intarg <= 10 and intarg >=5:
+                            flooding[chat_idstr]["limit"] = intarg
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="Flood has been set to: " + str(intarg))
+                        else:
+                            bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="The flood limit must be a number ≥ 5 and ≤ 10")   
+                    else:
+                        bot.sendMessage(chat_id=update.message.chat_id,
+                                        text="The flood limit must be a number ≥ 5 and ≤ 10")  
+                else:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text="Only mods can do stuff like that!")
+            else:
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+        else:
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+    else:
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="I don't mind if you flood me! I only care about flooding in groups.")  
                         
 def settings(bot, update):
     chat_idstr = str(update.message.chat_id)
@@ -1290,7 +1314,26 @@ def settings(bot, update):
     bot.sendMessage(chat_id=update.message.chat_id,
                     text=message)
     
-
+def idme(bot, update, args):
+    idbase = loadjson('./idbase.json', "idbase.json")
+                        
+    str_args = ' '.join(args)
+    if "@" in str_args:
+        idme_ = str_args.replace("@", "").lower()
+        for i in idbase.keys():
+            for tg_id, tg_user in idbase[i].items():
+                if tg_user == idme_:
+                    user_id = tg_id
+        try:
+            user_id
+        except NameError:
+            user_id = ""
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text="I don't know anyone by that name! If I'm not admin of a group they're in, or they haven't said anything, that could be why!")
+        if user_id:
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text="The Telegram ID of " + "@" + idme_ + " is " + user_id)
+            
 start_handler = CommandHandler('start', start)
 help_handler = CommandHandler('help', help_message, pass_args=True)
 note_handler = CommandHandler('note', note, pass_args=True)
@@ -1311,7 +1354,7 @@ lock_handler = CommandHandler('lock', lockme, pass_args=True)
 unlock_handler = CommandHandler('unlock', unlockme, pass_args=True)
 settings_handler = CommandHandler('settings', settings)
 setflood_handler = CommandHandler('setflood', setflood, pass_args=True)
-
+id_handler = CommandHandler('id', idme, pass_args=True)
 
 dispatcher.add_handler(start_handler)
 dispatcher.add_handler(help_handler)
@@ -1333,6 +1376,7 @@ dispatcher.add_handler(lock_handler)
 dispatcher.add_handler(unlock_handler)
 dispatcher.add_handler(settings_handler)
 dispatcher.add_handler(setflood_handler)
+dispatcher.add_handler(id_handler)
 dispatcher.add_handler(MessageHandler([Filters.all], floodcheck))
 dispatcher.add_handler(MessageHandler([Filters.all], receiveLocked))
 dispatcher.add_handler(MessageHandler([Filters.all], receiveMessage))
