@@ -316,13 +316,7 @@ def receiveMessage(bot, update):
         locked = loadjson('./locked.json', "locked.json")
 
         if chat_idstr not in locked.keys():
-            locked[chat_idstr] = {}
-            locked[chat_idstr]["sticker"] = "no"
-            locked[chat_idstr]["gif"] = "no"
-            locked[chat_idstr]["flood"] = "no"
-            locked[chat_idstr]["arabic"] = "yes"
-            locked[chat_idstr]["NSFW"] = "off"
-
+            fixlocked(bot, update)
         if chat_idstr not in promoted.keys():
             promoted[chat_idstr] = []
         if chat_idstr not in idbase.keys():
@@ -377,6 +371,8 @@ def receiveMessage(bot, update):
     dumpjson("banbase.json", banbase)
     dumpjson("promoted.json", promoted)
     dumpjson("locked.json", locked)
+    receiveLocked(bot, update)
+    floodcheck(bot, update)
 
 def receiveLocked(bot, update):
     if update.message.chat.type != "private":
@@ -384,6 +380,7 @@ def receiveLocked(bot, update):
         if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "false":
             if bot.id in get_admin_ids(bot, update.message.chat_id):
                 sentlock = loadjson('./sentlock.json', "sentlock.json")
+                idbase = loadjson('./idbase.json', "idbase.json")
                 if chat_idstr not in sentlock.keys():
                     sentlock[chat_idstr] = {}
                 if update.message.sticker:
@@ -391,11 +388,13 @@ def receiveLocked(bot, update):
                         if fromidstr not in sentlock[chat_idstr].keys():
                             sentlock[chat_idstr][fromidstr] = 1
                             bot.sendMessage(chat_id=update.message.chat_id,
-                                            text="Stickers are locked in this chat. If you send 2 more you will be kicked! Please don't make me do that :)")
+                                            text="This type of media is not allowed here. <code>1/3</code>",
+                                            parse_mode="HTML")
                         else:
                             if sentlock[chat_idstr][fromidstr] == 1:
                                 bot.sendMessage(chat_id=update.message.chat_id,
-                                            text="Don't do it again! No stickers please.")
+                                            text="This type of media is not allowed here. <code>2/3</code>",
+                                            parse_mode="HTML")
                                 sentlock[chat_idstr][fromidstr] = 2
 
                             else:
@@ -403,14 +402,28 @@ def receiveLocked(bot, update):
                                     bot.sendMessage(chat_id=update.message.chat_id,
                                                     text="Stickers are not allowed here.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked.")
                                     bot.kickChatMember(chat_id, fromid)
-                if update.message.text:
-                    if locked[chat_idstr]["arabic"] == "yes":
-                        message_text = update.message.text
-                        if detect(message_text) == "ar":
+                                    del sentlock[chat_idstr][fromidstr]
+                if locked[chat_idstr]["arabic"] == "yes":
+                    message_text = update.message.text
+                    if detect(message_text) == "ar":
+                        if fromidstr not in sentlock[chat_idstr].keys():
+                            sentlock[chat_idstr][fromidstr] = 1
                             bot.sendMessage(chat_id=update.message.chat_id,
-                                            text="Arabic is locked.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked.")
-                            bot.kickChatMember(chat_id, fromid)
+                                            text="Arabic is not allowed here. <code>1/3</code>",
+                                            parse_mode="HTML")
+                        else:
+                            if sentlock[chat_idstr][fromidstr] == 1:
+                                bot.sendMessage(chat_id=update.message.chat_id,
+                                            text="Arabic is not allowed here. <code>2/3</code>",
+                                            parse_mode="HTML")
+                                sentlock[chat_idstr][fromidstr] = 2
 
+                            else:
+                                if sentlock[chat_idstr][fromidstr] == 2:
+                                    bot.sendMessage(chat_id=update.message.chat_id,
+                                                    text="Arabic is not allowed here.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked.")
+                                    bot.kickChatMember(chat_id, fromid)
+                                    del sentlock[chat_idstr][fromidstr]
                 dumpjson("sentlock.json", sentlock)
 
 def floodcheck(bot, update):
@@ -424,39 +437,32 @@ def floodcheck(bot, update):
                 locked = loadjson('./locked.json', "locked.json")
                 idbase = loadjson('./idbase.json', "idbase.json")
 
-                if chat_idstr not in flooding.keys():
-                    flooding[chat_idstr] = {}
-                    flooding[chat_idstr]["limit"] = 5
+                if "floodmember" not in flooding[chat_idstr].keys():
                     flooding[chat_idstr]["floodmember"] = fromidstr
-                    flooding[chat_idstr]["floodcount"] = 1
-                if chat_idstr not in locked.keys():
-                    locked[chat_idstr] = {}
-                    locked[chat_idstr]["flood"] = "no"
-                if update.message:
-                    if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) != "true":
-                        if locked[chat_idstr]["flood"] == "yes":
-                            limit = flooding[chat_idstr]["limit"]
-                            count = flooding[chat_idstr]["floodcount"]
-                            if fromidstr == flooding[chat_idstr]["floodmember"]:
-                                if count < limit:
-                                    flooding[chat_idstr]["floodcount"] += 1
+
+                if locked[chat_idstr]["flood"] == "yes":
+                    limit = flooding[chat_idstr]["limit"]
+                    count = flooding[chat_idstr]["floodcount"]
+                    if fromidstr == flooding[chat_idstr]["floodmember"]:
+                        if count < limit:
+                            flooding[chat_idstr]["floodcount"] += 1
+                        else:
+                            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) != "true":
+                                promoted = loadjson('./promoted.json', "promoted.json")
+                                if chat_idstr in promoted.keys():
+                                    if fromid not in promoted[chat_idstr]:
+                                        bot.sendMessage(chat_id=update.message.chat_id,
+                                                        text="Flooding is not allowed here.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked")
+                                        bot.kickChatMember(chat_id, fromid)
+                                        flooding[chat_idstr]["floodcount"] = 1
                                 else:
-                                    if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) != "true":
-                                        promoted = loadjson('./promoted.json', "promoted.json")
-                                        if chat_idstr in promoted.keys():
-                                            if fromid not in promoted[chat_idstr]["mods"]:
-                                                bot.sendMessage(chat_id=update.message.chat_id,
-                                                                text="Flooding is not allowed here.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked")
-                                                bot.kickChatMember(chat_id, fromid)
-                                                flooding[chat_idstr]["floodcount"] = 1
-                                        else:
-                                            bot.sendMessage(chat_id=update.message.chat_id,
-                                                            text="Flooding is not allowed here.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked")
-                                            bot.kickChatMember(chat_id, fromid)
-                                            flooding[chat_idstr]["floodcount"] = 1
-                            else:
-                                flooding[chat_idstr]["floodmember"] = fromidstr
-                                flooding[chat_idstr]["floodcount"] = 1
+                                    bot.sendMessage(chat_id=update.message.chat_id,
+                                                    text="Flooding is not allowed here.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked")
+                                    bot.kickChatMember(chat_id, fromid)
+                                    flooding[chat_idstr]["floodcount"] = 1
+                    else:
+                        flooding[chat_idstr]["floodmember"] = fromidstr
+                        flooding[chat_idstr]["floodcount"] = 1
 
                 dumpjson("flooding.json", flooding)
 
@@ -1225,6 +1231,31 @@ def lockme(bot, update, args):
         bot.sendMessage(chat_id=update.message.chat_id,
                         text="Locking settings is for groups!")
 
+def fixlocked(bot, update):
+    if update.message.chat.type != "private":
+
+        if bot.id in get_admin_ids(bot, update.message.chat_id):
+            global locked
+            lockedmsg = ""
+            chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+            moderated = loadjson('./moderated.json', "moderated.json")
+            if chat_idstr in moderated:
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
+                    locked = loadjson('./locked.json', "locked.json")
+                    if chat_idstr not in locked.keys():
+                        locked[chat_idstr] = {}
+                        locked[chat_idstr]["sticker"] = "no"
+                        locked[chat_idstr]["gif"] = "no"
+                        locked[chat_idstr]["flood"] = "yes"
+                        locked[chat_idstr]["arabic"] = "yes"
+                        locked[chat_idstr]["NSFW"] = "off"
+                    locked[chat_idstr]["flood"] = "yes"
+                    flooding = loadjson('./flooding.json', "flooding.json")
+                    flooding[chat_idstr] = {}
+                    flooding[chat_idstr]["limit"] = 10
+                    flooding[chat_idstr]["floodcount"] = 1
+                    dumpjson("flooding.json", flooding)
+                    dumpjson("locked.json", locked)
 
 def unlockme(bot, update, args):
     if update.message.chat.type != "private":
@@ -1307,6 +1338,7 @@ def setflood(bot, update, args):
                             flooding[chat_idstr]["limit"] = intarg
                             bot.sendMessage(chat_id=update.message.chat_id,
                                             text="Flood has been set to: " + str(intarg))
+                            dumpjson("flooding.json", flooding)
                         else:
                             bot.sendMessage(chat_id=update.message.chat_id,
                                             text="The flood limit must be a number ≥ 5 and ≤ 10")
@@ -1406,36 +1438,35 @@ def settings(bot, update):
     moderated = loadjson('./moderated.json', "moderated.json")
     chat_idstr = str(update.message.chat_id)
     locked = loadjson('./locked.json', "locked.json")
-
     if chat_idstr not in locked.keys():
-        message = "This is a bug. Please use " + '"' + "/lock sticker" + '"' + " to get rid of this message. You only have to do this once per new chat I am added to."
-    else:
-        if chat_idstr in moderated:
-            locked = loadjson('./locked.json', "locked.json")
-            flooding = loadjson('./flooding.json', "flooding.json")
-            if locked[chat_idstr]["sticker"] == "yes":
-                sticker = "Lock Sticker: Yes\n"
-            else:
-                sticker = "Lock Sticker: No\n"
-            if locked[chat_idstr]["flood"] == "yes":
-                limit = flooding[chat_idstr]["limit"]
-                flood = "Lock flood: Yes\nFlood sensitivity: " + str(limit) + "\n"
-            else:
-                flood = "Lock flood: No\n"
-            if locked[chat_idstr]["arabic"] == "yes":
-                arabic = "Lock Arabic: Yes\n"
-            else:
-                arabic = "Lock Arabic: No\n"
-            if locked[chat_idstr]["NSFW"] == "on":
-                nsfw = "NSFW: Yes\n"
-            else:
-                nsfw = ""
-            if nsfw:
-                message = "Supergroup settings:\n" + sticker + flood + arabic + nsfw
-            else:
-                message = "Supergroup settings:\n" + sticker + flood + arabic
-    bot.sendMessage(chat_id=update.message.chat_id,
-                    text=message)
+        fixlocked(bot, update)
+        time.sleep(1)
+    if chat_idstr in moderated:
+        locked = loadjson('./locked.json', "locked.json")
+        flooding = loadjson('./flooding.json', "flooding.json")
+        if locked[chat_idstr]["sticker"] == "yes":
+            sticker = "Lock Sticker: Yes\n"
+        else:
+            sticker = "Lock Sticker: No\n"
+        if locked[chat_idstr]["flood"] == "yes":
+            limit = flooding[chat_idstr]["limit"]
+            flood = "Lock flood: Yes\nFlood sensitivity: " + str(limit) + "\n"
+        else:
+            flood = "Lock flood: No\n"
+        if locked[chat_idstr]["arabic"] == "yes":
+            arabic = "Lock Arabic: Yes\n"
+        else:
+            arabic = "Lock Arabic: No\n"
+        if locked[chat_idstr]["NSFW"] == "on":
+            nsfw = "NSFW: Yes\n"
+        else:
+            nsfw = ""
+        if nsfw:
+            message = "Supergroup settings:\n" + sticker + flood + arabic + nsfw
+        else:
+            message = "Supergroup settings:\n" + sticker + flood + arabic
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text=message)
 
 def idme(bot, update, args):
     idbase = loadjson('./idbase.json', "idbase.json")
@@ -1513,9 +1544,9 @@ dispatcher.add_handler(butts_handler)
 dispatcher.add_handler(boobs_handler)
 dispatcher.add_handler(nsfw_handler)
 
-dispatcher.add_handler(MessageHandler([Filters.all], floodcheck))
-dispatcher.add_handler(MessageHandler([Filters.all], receiveLocked))
 dispatcher.add_handler(MessageHandler([Filters.all], receiveMessage))
+dispatcher.add_handler(MessageHandler([Filters.all], receiveLocked))
+dispatcher.add_handler(MessageHandler([Filters.all], floodcheck))
 
 dispatcher.add_error_handler(error)
 
