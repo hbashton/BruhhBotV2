@@ -126,10 +126,12 @@ def dumpjson(filename, var):
 def owner_admin_mod_check(bot, chat_id, chat_idstr, user_id):
     promoted = loadjson('./promoted.json', "promoted.json")
     if chat_idstr in promoted:
-        if user_id in get_admin_ids(bot, chat_id) or promoted[chat_idstr] or user_id == int(config['ADMIN']['id']):
+        if user_id in get_admin_ids(bot, chat_id) or user_id == int(config['ADMIN']['id']):
             return "true"
         else:
             return "false"
+    if user_id in promoted[chat_idstr]:
+        return "true"
     else:
         if user_id in get_admin_ids(bot, chat_id) or user_id == int(config['ADMIN']['id']):
             return "true"
@@ -280,7 +282,7 @@ def rem(bot, update):
     global moderated
     chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
     if update.message.chat.type != "private":
-        if get_user_info(bot, chat_id, fromid, "", "status") == "creator":
+        if get_user_info(bot, chat_id, fromid, "", "status") == "creator" or owner_check(bot, chat_id, fromid) == "true":
             if bot.id in get_admin_ids(bot, update.message.chat_id):
                 moderated = loadjson('./moderated.json', "moderated.json")
                 if chat_idstr in moderated.keys():
@@ -308,7 +310,7 @@ def receiveMessage(bot, update):
     global banbase
     global promoted
     global locked
-
+    global welcome
     idbase = loadjson('./idbase.json', "idbase.json")
 
     if update.message.chat.type != "private":
@@ -326,6 +328,16 @@ def receiveMessage(bot, update):
 
         locked = loadjson('./locked.json', "locked.json")
 
+        welcome = loadjson('./welcome.json', "welcome.json")
+
+        flooding = loadjson('./flooding.json', "flooding.json")
+
+        if chat_idstr not in welcome.keys():
+            welcome[chat_idstr] = {}
+            welcome[chat_idstr]["welcome"] = ""
+            welcome[chat_idstr]["message"] = ""
+        if chat_idstr not in flooding.keys():
+            flooding[chat_idstr] = {}
         if chat_idstr not in locked.keys():
             fixlocked(bot, update)
         if chat_idstr not in promoted.keys():
@@ -365,10 +377,22 @@ def receiveMessage(bot, update):
                 bot.kickChatMember(chat_id, tgid)
                 bot.sendMessage(chat_id=update.message.chat_id,
                                 text="@" + tguser + " ....I really don't like them. '_'")
+            if welcome[chat_idstr]["welcome"] == "yes":
+                if not welcome[chat_idstr]["message"]:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    reply_to_message_id=update.message.message_id,
+                                    text="Hi @" + tguser + "! Welcome to " + update.message.chat.title)
+                else:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    reply_to_message_id=update.message.message_id,
+                                    text="Hi @" + tguser + "! " + welcome[chat_idstr]["message"])
             dumpjson("idbase.json", idbase)
             dumpjson("banbase.json", banbase)
             dumpjson("promoted.json", promoted)
             dumpjson("locked.json", locked)
+            dumpjson("flooding.json", flooding)
+            dumpjson("welcome.json", welcome)
+
         if update.message.left_chat_member:
             tguser = str(update.message.left_chat_member["username"]).lower()
             tgid = str(update.message.left_chat_member["id"])
@@ -384,6 +408,9 @@ def receiveMessage(bot, update):
             dumpjson("banbase.json", banbase)
             dumpjson("promoted.json", promoted)
             dumpjson("locked.json", locked)
+            dumpjson("flooding.json", flooding)
+            dumpjson("welcome.json", welcome)
+
     receiveLocked(bot, update)
     floodcheck(bot, update)
     if update.message.text:
@@ -399,10 +426,20 @@ def receiveMessage(bot, update):
                                             text=extra + ":\n" + saved[chat_idstr][extra])
 
 def receiveLocked(bot, update):
+    idbase = loadjson('./idbase.json', "idbase.json")
+    tguser = str(update.message.from_user.username).lower()
+
     if update.message.chat.type != "private":
         chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
         if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "false":
             if bot.id in get_admin_ids(bot, update.message.chat_id):
+                if chat_idstr not in idbase.keys():
+                    idbase[chat_idstr] = {}
+                    idbase[chat_idstr][fromidstr] = tguser
+                if fromidstr not in idbase[chat_idstr].keys():
+                    idbase[chat_idstr][fromidstr] = tguser
+                dumpjson("idbase.json", idbase)
+
                 sentlock = loadjson('./sentlock.json', "sentlock.json")
                 idbase = loadjson('./idbase.json', "idbase.json")
                 if chat_idstr not in sentlock.keys():
@@ -413,6 +450,7 @@ def receiveLocked(bot, update):
                             if fromidstr not in sentlock[chat_idstr].keys():
                                 sentlock[chat_idstr][fromidstr] = 1
                                 bot.sendMessage(chat_id=update.message.chat_id,
+                                                reply_to_message_id=update.message.message_id,
                                                 text="This type of media is not allowed here. <code>1/3</code>",
                                                 parse_mode="HTML")
                                 dumpjson("sentlock.json", sentlock)
@@ -420,6 +458,7 @@ def receiveLocked(bot, update):
                             else:
                                 if sentlock[chat_idstr][fromidstr] == 1:
                                     bot.sendMessage(chat_id=update.message.chat_id,
+                                                reply_to_message_id=update.message.message_id,
                                                 text="This type of media is not allowed here. <code>2/3</code>",
                                                 parse_mode="HTML")
                                     sentlock[chat_idstr][fromidstr] = 2
@@ -428,6 +467,7 @@ def receiveLocked(bot, update):
                                 else:
                                     if sentlock[chat_idstr][fromidstr] == 2:
                                         bot.sendMessage(chat_id=update.message.chat_id,
+                                                        reply_to_message_id=update.message.message_id,
                                                         text="Gifs are not allowed here.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked.")
                                         bot.kickChatMember(chat_id, fromid)
                                         del sentlock[chat_idstr][fromidstr]
@@ -438,6 +478,7 @@ def receiveLocked(bot, update):
                         if fromidstr not in sentlock[chat_idstr].keys():
                             sentlock[chat_idstr][fromidstr] = 1
                             bot.sendMessage(chat_id=update.message.chat_id,
+                                            reply_to_message_id=update.message.message_id,
                                             text="This type of media is not allowed here. <code>1/3</code>",
                                             parse_mode="HTML")
                             dumpjson("sentlock.json", sentlock)
@@ -453,32 +494,37 @@ def receiveLocked(bot, update):
                             else:
                                 if sentlock[chat_idstr][fromidstr] == 2:
                                     bot.sendMessage(chat_id=update.message.chat_id,
+                                                    reply_to_message_id=update.message.message_id,
                                                     text="Stickers are not allowed here.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked.")
                                     bot.kickChatMember(chat_id, fromid)
                                     del sentlock[chat_idstr][fromidstr]
                                     dumpjson("sentlock.json", sentlock)
 
                 if locked[chat_idstr]["arabic"] == "yes":
-                    message_text = update.message.text
-                    if detect(message_text) == "ar":
-                        if fromidstr not in sentlock[chat_idstr].keys():
-                            sentlock[chat_idstr][fromidstr] = 1
-                            bot.sendMessage(chat_id=update.message.chat_id,
-                                            text="Arabic is not allowed here. <code>1/3</code>",
-                                            parse_mode="HTML")
-                        else:
-                            if sentlock[chat_idstr][fromidstr] == 1:
+                    if update.message.text:
+                        message_text = update.message.text
+                        if detect(message_text) == "ar":
+                            if fromidstr not in sentlock[chat_idstr].keys():
+                                sentlock[chat_idstr][fromidstr] = 1
                                 bot.sendMessage(chat_id=update.message.chat_id,
-                                            text="Arabic is not allowed here. <code>2/3</code>",
-                                            parse_mode="HTML")
-                                sentlock[chat_idstr][fromidstr] = 2
-
+                                                reply_to_message_id=update.message.message_id,
+                                                text="Arabic is not allowed here. <code>1/3</code>",
+                                                parse_mode="HTML")
                             else:
-                                if sentlock[chat_idstr][fromidstr] == 2:
+                                if sentlock[chat_idstr][fromidstr] == 1:
                                     bot.sendMessage(chat_id=update.message.chat_id,
-                                                    text="Arabic is not allowed here.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked.")
-                                    bot.kickChatMember(chat_id, fromid)
-                                    del sentlock[chat_idstr][fromidstr]
+                                                reply_to_message_id=update.message.message_id,
+                                                text="Arabic is not allowed here. <code>2/3</code>",
+                                                parse_mode="HTML")
+                                    sentlock[chat_idstr][fromidstr] = 2
+
+                                else:
+                                    if sentlock[chat_idstr][fromidstr] == 2:
+                                        bot.sendMessage(chat_id=update.message.chat_id,
+                                                        reply_to_message_id=update.message.message_id,
+                                                        text="Arabic is not allowed here.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked.")
+                                        bot.kickChatMember(chat_id, fromid)
+                                        del sentlock[chat_idstr][fromidstr]
 
 def floodcheck(bot, update):
     global flooding
@@ -490,10 +536,17 @@ def floodcheck(bot, update):
                 flooding = loadjson('./flooding.json', "flooding.json")
                 locked = loadjson('./locked.json', "locked.json")
                 idbase = loadjson('./idbase.json', "idbase.json")
-
-                if "floodmember" not in flooding[chat_idstr].keys():
+                if chat_idstr not in flooding.keys():
+                    flooding[chat_idstr] = {}
                     flooding[chat_idstr]["floodmember"] = fromidstr
-
+                    dumpjson("flooding.json", flooding)
+                    flooding = loadjson('./flooding.json', "flooding.json")
+                if "floodmember" not in flooding[chat_idstr].keys():
+                     flooding[chat_idstr]["floodmember"] = fromidstr
+                if "limit" not in flooding[chat_idstr].keys():
+                    flooding[chat_idstr]["limit"] = 10
+                if "floodcount" not in flooding[chat_idstr].keys():
+                    flooding[chat_idstr]["floodcount"] = 0
                 if locked[chat_idstr]["flood"] == "yes":
                     if chat_idstr not in flooding.keys():
                         fixlocked(bot, update)
@@ -506,11 +559,12 @@ def floodcheck(bot, update):
                             if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) != "true":
                                 promoted = loadjson('./promoted.json', "promoted.json")
                                 if chat_idstr in promoted.keys():
-                                    if fromid not in promoted[chat_idstr]:
-                                        bot.sendMessage(chat_id=update.message.chat_id,
-                                                        text="Flooding is not allowed here.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked")
-                                        bot.kickChatMember(chat_id, fromid)
-                                        flooding[chat_idstr]["floodcount"] = 1
+                                    if promoted[chat_idstr]:
+                                        if fromid not in promoted[chat_idstr]:
+                                            bot.sendMessage(chat_id=update.message.chat_id,
+                                                            text="Flooding is not allowed here.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked")
+                                            bot.kickChatMember(chat_id, fromid)
+                                            flooding[chat_idstr]["floodcount"] = 1
                                 else:
                                     bot.sendMessage(chat_id=update.message.chat_id,
                                                     text="Flooding is not allowed here.\n" + "@" + idbase[chat_idstr][fromidstr] + " kicked")
@@ -533,14 +587,18 @@ def modlist(bot, update):
 
             if chat_idstr in moderated:
                 if chat_idstr in promoted.keys():
-                    for user in promoted[chat_idstr]:
-                        for userid, username in idbase[chat_idstr].items():
-                            if str(user) == userid:
-                                try:
-                                    userlist
-                                except NameError:
-                                    userlist = "Moderators for " + chat_title + ":\n"
-                                userlist = userlist + "@" + username + "\n"
+                    if promoted[chat_idstr]:
+                        for user in promoted[chat_idstr]:
+                            for i in idbase.keys():
+                                for userid, username in idbase[i].items():
+                                    if str(user) == userid:
+                                        try:
+                                            userlist
+                                        except NameError:
+                                            userlist = "Moderators for " + chat_title + ":\n"
+                                        userlist = userlist + "@" + username + "\n"
+                    else:
+                        userlist = "No moderators for this chat!"
                 else:
                     userlist = "No moderators for this chat!"
                 try:
@@ -617,11 +675,12 @@ def getbanlist(bot, update):
                         lst = banbase[chat_idstr]
                         length = len(lst)
                         for i in range(0, length):
-                            for ID, USER in idbase[chat_idstr].items():
-                                if ID == banbase[chat_idstr][i]:
-                                    if not msg:
-                                        msg = "Banlist for " + update.message.chat.title + ":\n"
-                                    msg =  msg + "@" + USER + "\n"
+                            for i in idbase.keys():
+                                for ID, USER in idbase[i].items():
+                                    if ID == banbase[chat_idstr][i]:
+                                        if not msg:
+                                            msg = "Banlist for " + update.message.chat.title + ":\n"
+                                        msg =  msg + "@" + USER + "\n"
                     else:
                         msg = "No users banned from this chat"
                 bot.sendMessage(chat_id=update.message.chat_id,
@@ -640,19 +699,19 @@ def promoteme(bot, update, args):
             chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
             moderated = loadjson('./moderated.json', "moderated.json")
             if chat_idstr in moderated:
-                if get_user_info(bot, chat_id, fromid, "", "status") == "creator":
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                     global idbase
                     global promoted
-
                     promoted = loadjson('./promoted.json', "promoted.json")
                     idbase = loadjson('./idbase.json', "idbase.json")
 
                     str_args = ' '.join(args)
                     if "@" in str_args:
                         promoteuser = str_args.replace("@", "").lower()
-                        for tg_id, tg_user in idbase[chat_idstr].items():
-                            if tg_user == promoteuser:
-                                user_id = tg_id
+                        for i in idbase.keys():
+                            for tg_id, tg_user in idbase[i].items():
+                                if tg_user == promoteuser:
+                                    user_id = tg_id
                         try:
                             user_id
                         except NameError:
@@ -664,13 +723,19 @@ def promoteme(bot, update, args):
                         if user_id:
                             promoteuser = str_args.replace("@", "")
                             if chat_idstr in promoted.keys():
-                                if user_id not in promoted[chat_idstr]:
-                                    promoted[chat_idstr] = promoted[chat_idstr] + [user_id]
+                                if promoted[chat_idstr]:
+                                    if user_id not in promoted[chat_idstr]:
+                                        promoted[chat_idstr].append(user_id)
+                                        bot.sendMessage(chat_id=update.message.chat_id,
+                                                        text="User @" + promoteuser + " is now a mod of " + update.message.chat.title + "! Congratulations!")
+                                    else:
+                                        bot.sendMessage(chat_id=update.message.chat_id,
+                                                        text="User @" + promoteuser + " is already a moderator.")
+                                else:
+                                    promoted[chat_idstr] = []
+                                    promoted[chat_idstr] = [user_id]
                                     bot.sendMessage(chat_id=update.message.chat_id,
                                                     text="User @" + promoteuser + " is now a mod of " + update.message.chat.title + "! Congratulations!")
-                                else:
-                                    bot.sendMessage(chat_id=update.message.chat_id,
-                                                    text="User @" + promoteuser + " is already a moderator.")
                             else:
                                 promoted[chat_idstr] = []
                                 promoted[chat_idstr] = [user_id]
@@ -679,13 +744,13 @@ def promoteme(bot, update, args):
 
                     else:
                         bot.sendMessage(chat_id=update.message.chat_id,
-                                        text="You can ban promote someone with /promote @username")
+                                        text="You can promote someone with /promote @username")
 
                     dumpjson("promoted.json", promoted)
 
                 else:
                     bot.sendMessage(chat_id=update.message.chat_id,
-                                    text="Only the creator can do stuff like that!")
+                                    text="Only mods can do stuff like that!")
             else:
                 bot.sendMessage(chat_id=update.message.chat_id,
                                 text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
@@ -704,7 +769,7 @@ def demoteme(bot, update, args):
             chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
             moderated = loadjson('./moderated.json', "moderated.json")
             if chat_idstr in moderated:
-                if get_user_info(bot, chat_id, fromid, "", "status") == "creator":
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                     global idbase
                     global promoted
 
@@ -714,9 +779,10 @@ def demoteme(bot, update, args):
                     str_args = ' '.join(args)
                     if "@" in str_args:
                         demoteuser = str_args.replace("@", "").lower()
-                        for tg_id, tg_user in idbase[chat_idstr].items():
-                            if tg_user == demoteuser:
-                                user_id = tg_id
+                        for i in idbase.keys():
+                            for tg_id, tg_user in idbase[i].items():
+                                if tg_user == demoteuser:
+                                    user_id = tg_id
                         try:
                             user_id
                         except NameError:
@@ -729,7 +795,7 @@ def demoteme(bot, update, args):
                             if chat_idstr in promoted.keys():
                                 if user_id in promoted[chat_idstr]:
                                     demoteuser = str_args.replace("@", "")
-                                    promoted[chat_idstr] = promoted[chat_idstr].remove(user_id)
+                                    promoted[chat_idstr].remove(user_id)
                                     bot.sendMessage(chat_id=update.message.chat_id,
                                                     text="User @" + demoteuser + " is no longer a moderator of " + update.message.chat.title + " :(")
                                 else:
@@ -745,7 +811,7 @@ def demoteme(bot, update, args):
 
                 else:
                     bot.sendMessage(chat_id=update.message.chat_id,
-                                    text="Only the creator can do stuff like that!")
+                                    text="Only mods can do stuff like that!")
             else:
                 bot.sendMessage(chat_id=update.message.chat_id,
                                 text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
@@ -774,9 +840,10 @@ def unbanme(bot, update, args):
                     str_args = ' '.join(args)
                     if "@" in str_args:
                         unbanuser = str_args.replace("@", "").lower()
-                        for tg_id, tg_user in idbase[chat_idstr].items():
-                            if tg_user == unbanuser:
-                                user_id = tg_id
+                        for i in idbase.keys():
+                            for tg_id, tg_user in idbase[i].items():
+                                if tg_user == unbanuser:
+                                    user_id = tg_id
                         try:
                             user_id
                         except NameError:
@@ -826,9 +893,10 @@ def unbanall(bot, update, args):
                     str_args = ' '.join(args)
                     if "@" in str_args:
                         unbanuser = str_args.replace("@", "").lower()
-                        for tg_id, tg_user in idbase[chat_idstr].items():
-                            if tg_user == unbanuser:
-                                user_id = tg_id
+                        for i in idbase.keys():
+                            for tg_id, tg_user in idbase[i].items():
+                                if tg_user == unbanuser:
+                                    user_id = tg_id
                         try:
                             user_id
                         except NameError:
@@ -882,9 +950,10 @@ def banall(bot, update, args):
                     str_args = ' '.join(args)
                     if "@" in str_args:
                         banuser = str_args.replace("@", "").lower()
-                        for tg_id, tg_user in idbase[chat_idstr].items():
-                            if tg_user == banuser:
-                                user_id = tg_id
+                        for i in idbase.keys():
+                            for tg_id, tg_user in idbase[i].items():
+                                if tg_user == banuser:
+                                    user_id = tg_id
                         try:
                             user_id
                         except NameError:
@@ -920,7 +989,6 @@ def banall(bot, update, args):
 
 def banme(bot, update, args):
     if update.message.chat.type != "private":
-
         if bot.id in get_admin_ids(bot, update.message.chat_id):
             chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
             moderated = loadjson('./moderated.json', "moderated.json")
@@ -935,9 +1003,11 @@ def banme(bot, update, args):
                     str_args = ' '.join(args)
                     if "@" in str_args:
                         banuser = str_args.replace("@", "").lower()
-                        for tg_id, tg_user in idbase[chat_idstr].items():
-                            if tg_user == banuser:
-                                user_id = tg_id
+                        for i in idbase.keys():
+                            for tg_id, tg_user in idbase[i].items():
+                                if tg_user.lower() == banuser:
+                                    user_id = tg_id
+                                    print(banuser + " banned from " + update.message.chat.title)
                         try:
                             user_id
                         except NameError:
@@ -983,9 +1053,10 @@ def kick_user(bot, update, args):
                 str_args = ' '.join(args)
                 if "@" in str_args:
                     banuser = str_args.replace("@", "").lower()
-                    for tg_id, tg_user in idbase[chat_idstr].items():
-                        if tg_user == banuser:
-                            user_id = tg_id
+                    for i in idbase.keys():
+                        for tg_id, tg_user in idbase[i].items():
+                            if tg_user == banuser:
+                                user_id = tg_id
                     try:
                         user_id
                     except NameError:
@@ -1472,7 +1543,6 @@ def setflood(bot, update, args):
 
                 if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                     flooding = loadjson('./flooding.json', "flooding.json")
-                    limit = flooding[chat_idstr]["limit"]
                     intarg = int(args[0])
                     if isinstance(intarg, int):
                         if intarg <= 10 and intarg >=5:
@@ -1534,7 +1604,7 @@ def checknsfw(bot, update, args):
                 else:
                     message = "Usage: /nsfw [on/off]"
             else:
-                message = "You're note an admin."
+                message = "You're not an admin."
 
     bot.sendMessage(chat_id=update.message.chat_id,
                     text=message)
@@ -1588,9 +1658,10 @@ def resetwarn(bot, update, args):
                     str_args = ' '.join(args)
                     if "@" in str_args:
                         unwarn = str_args.replace("@", "").lower()
-                        for tg_id, tg_user in idbase[chat_idstr].items():
-                            if tg_user == unwarn:
-                                user_id = tg_id
+                        for i in idbase.keys():
+                            for tg_id, tg_user in idbase[i].items():
+                                if tg_user == unwarn:
+                                    user_id = tg_id
                         try:
                             user_id
                         except NameError:
@@ -1682,6 +1753,7 @@ def setrules(bot, update, args):
     else:
         bot.sendMessage(chat_id=update.message.chat_id,
                         text="No rules for private chat!")
+
 def settings(bot, update):
     moderated = loadjson('./moderated.json', "moderated.json")
     chat_idstr = str(update.message.chat_id)
@@ -1723,6 +1795,54 @@ def settings(bot, update):
         bot.sendMessage(chat_id=update.message.chat_id,
                         text=message)
 
+def welcomeme(bot, update, args):
+    global welcome
+    welcome = loadjson('./welcome.json', "welcome.json")
+    moderated = loadjson('./moderated.json', "moderated.json")
+    global asker_chatidstr
+    global asker
+    chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+    asker = fromid
+    asker_chatidstr = chat_idstr
+    if update.message.chat.type != "private":
+        if bot.id in get_admin_ids(bot, update.message.chat_id):
+            chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
+                if chat_idstr in moderated:
+                    if chat_idstr not in welcome.keys():
+                        welcome[chat_idstr] = {}
+                        welcome[chat_idstr]["welcome"] = ""
+                        welcome[chat_idstr]["message"] = ""
+                        dumpjson("welcome.json", welcome)
+
+                    if len(args) == 0:
+                        keyboard = [[InlineKeyboardButton("YES", callback_data='welcomeon')],
+
+                        [InlineKeyboardButton("NO", callback_data='welcomeoff')]]
+
+                        reply_markup = InlineKeyboardMarkup(keyboard)
+                        update.message.reply_text('Should I welcome new visitors?', reply_markup=reply_markup)
+                    else:
+                        message_text = update.message.text
+                        welcome_txt = message_text.split(' ', 1)[1]
+                        welcome[chat_idstr]["message"] = welcome_txt
+                        msg =  "Alright, I've updated my mannerisms!"
+                        dumpjson("welcome.json", welcome)
+                        bot.sendMessage(chat_id=update.message.chat_id,
+                                        text=msg)
+                else:
+                    bot.sendMessage(chat_id=update.message.chat_id,
+                                    text=update.message.chat.title + "? Never heard of it! Tell me about it with /add")
+            else:
+                bot.sendMessage(chat_id=update.message.chat_id,
+                                text="Only mods can do stuff like that!")
+        else:
+            bot.sendMessage(chat_id=update.message.chat_id,
+                            text="I'm not an admin! Please make me one, otherwise I can't do anything!")
+    else:
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="Nope. Not welcoming you.")
+
 def idme(bot, update, args):
     idbase = loadjson('./idbase.json', "idbase.json")
 
@@ -1731,7 +1851,8 @@ def idme(bot, update, args):
         idme_ = str_args.replace("@", "").lower()
         for i in idbase.keys():
             for tg_id, tg_user in idbase[i].items():
-                if tg_user == idme_:
+                if tg_user.lower() == idme_:
+                    print(tg_user)
                     user_id = tg_id
         try:
             user_id
@@ -1748,6 +1869,51 @@ def idme(bot, update, args):
                 chat_idstr = str(update.message.chat_id)
                 bot.sendMessage(chat_id=update.message.chat_id,
                                 text="The ID of " + update.message.chat.title + " is " + chat_idstr)
+
+
+
+def button(bot, update, direct=True):
+        global welcome
+        welcome = loadjson('./welcome.json', "welcome.json")
+        user_id = update.callback_query.from_user.id
+        if user_id == asker:
+            query = update.callback_query
+            chat_idstr = asker_chatidstr
+            selected_button = query.data
+            if selected_button == 'welcomeon':
+                bot.editMessageText(text="Selected option: YES",
+                                    chat_id=query.message.chat_id,
+                                    message_id=query.message.message_id)
+                if not welcome[chat_idstr]["welcome"]:
+                    welcome[chat_idstr]["welcome"] = "yes"
+                    bot.sendMessage(chat_id=query.message.chat_id,
+                                    text="I'll welcome new users from now on!",
+                                    parse_mode="Markdown")
+                    dumpjson("welcome.json", welcome)
+                else:
+                    bot.sendMessage(chat_id=query.message.chat_id,
+                                    text="I already know how to be polite! :)",
+                                    parse_mode="Markdown")
+                    dumpjson("welcome.json", welcome)
+
+            if selected_button == 'welcomeoff':
+                bot.editMessageText(text="Selected option: NO",
+                                    chat_id=query.message.chat_id,
+                                    message_id=query.message.message_id)
+                if welcome[chat_idstr]["welcome"]:
+                    del welcome[chat_idstr]["welcome"]
+                    bot.sendMessage(chat_id=query.message.chat_id,
+                                    text="Well...I was gonna be polite, but I guess not.",
+                                    parse_mode="Markdown")
+                else:
+                    bot.sendMessage(chat_id=query.message.chat_id,
+                                    text="I don't welcome people. Yeah. I got it.",
+                                    parse_mode="Markdown")
+        else:
+                bot.sendMessage(chat_id=query.message.chat_id,
+                                text="You trying to spam me bro?",
+                                parse_mode="Markdown")
+        return False
 
 start_handler = CommandHandler('start', start)
 help_handler = CommandHandler('help', help_message, pass_args=True)
@@ -1778,6 +1944,7 @@ rules_handler = CommandHandler('rules', rules_get)
 banlist_handler = CommandHandler('banlist', getbanlist)
 gbanlist_handler = CommandHandler('gbanlist', getglobalbanlist)
 resetwarn_handler = CommandHandler('reset', resetwarn, pass_args=True)
+welcome_handler = CommandHandler('welcome', welcomeme, pass_args=True)
 
 dispatcher.add_handler(start_handler)
 dispatcher.add_handler(help_handler)
@@ -1808,12 +1975,13 @@ dispatcher.add_handler(rules_handler)
 dispatcher.add_handler(banlist_handler)
 dispatcher.add_handler(gbanlist_handler)
 dispatcher.add_handler(resetwarn_handler)
+dispatcher.add_handler(welcome_handler)
 
 
 dispatcher.add_handler(MessageHandler([Filters.all], receiveMessage))
 dispatcher.add_handler(MessageHandler([Filters.all], receiveLocked))
 dispatcher.add_handler(MessageHandler([Filters.all], floodcheck))
-
+dispatcher.add_handler(CallbackQueryHandler(button))
 dispatcher.add_error_handler(error)
 
 updater.start_polling()
