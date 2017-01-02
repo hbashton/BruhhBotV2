@@ -348,12 +348,7 @@ def receiveMessage(bot, update):
             banbase[chat_idstr] = []
         if "global" not in banbase.keys():
             banbase["global"] = []
-        if fromidstr not in idbase[chat_idstr].keys():
-            idbase[chat_idstr][fromidstr] = tguser
-        else:
-            olduser = idbase[chat_idstr][fromidstr]
-            if olduser != tguser:
-                idbase[chat_idstr][fromidstr] = tguser
+        idbase[chat_idstr][fromidstr] = tguser
         if fromidstr in banbase[chat_idstr]:
             bot.kickChatMember(chat_id, fromidstr)
         if fromidstr in banbase["global"]:
@@ -386,12 +381,12 @@ def receiveMessage(bot, update):
                     bot.sendMessage(chat_id=update.message.chat_id,
                                     reply_to_message_id=update.message.message_id,
                                     text="Hi @" + tguser + "! " + welcome[chat_idstr]["message"])
-            dumpjson("idbase.json", idbase)
-            dumpjson("banbase.json", banbase)
-            dumpjson("promoted.json", promoted)
-            dumpjson("locked.json", locked)
-            dumpjson("flooding.json", flooding)
-            dumpjson("welcome.json", welcome)
+        dumpjson("idbase.json", idbase)
+        dumpjson("banbase.json", banbase)
+        dumpjson("promoted.json", promoted)
+        dumpjson("locked.json", locked)
+        dumpjson("flooding.json", flooding)
+        dumpjson("welcome.json", welcome)
 
         if update.message.left_chat_member:
             tguser = str(update.message.left_chat_member["username"]).lower()
@@ -590,7 +585,7 @@ def modlist(bot, update):
                     if promoted[chat_idstr]:
                         for user in promoted[chat_idstr]:
                             for i in idbase.keys():
-                                for userid, username in idbase[i].items():
+                                for userid, username in idbase[chat_idstr].items():
                                     if str(user) == userid:
                                         try:
                                             userlist
@@ -1168,7 +1163,7 @@ def note(bot, update, args):
                     if notename in notes[chat_idstr]["admin"]:
                         note = notename + ":\n" + str(notes[chat_idstr]["admin"][notename])
                     else:
-                        note = "That note name exist yet! You can create it with\n/note " + notename + " 'content'"
+                        note = "That note name doesn't exist yet! You can create it with\n/note " + notename + " 'content'"
 
             else:
                 note = "Use /note lock 'notename' 'content' to lock a note with that content as editable to only admins."
@@ -1315,35 +1310,39 @@ def save_message(bot, update, args):
     global saved
     saved = loadjson('./saved.json', "saved.json")
     chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
-    try:
-        saved
-    except NameError:
-        saved = {}
-    if chat_idstr not in saved.keys():
-        saved[chat_idstr] = {}
+    if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
+        try:
+            saved
+        except NameError:
+            saved = {}
+        if chat_idstr not in saved.keys():
+            saved[chat_idstr] = {}
 
-    if len(args) == 0:
-        saves = "Save a message with\n/save 'name' 'message'\nand retrieve it later with\n/get 'name'"
-    if len(args) == 1:
-        saves = "Save a message with\n/save 'name' 'message'\nand retrieve it later with\n/get 'name'"
-        savename = args[0]
-        if savename in saved[chat_idstr]:
-            saves = savename + ":\n" + str(saved[chat_idstr][savename])
-        else:
-            saves = "That name isn't saved yet! You can create it with\n/save " + savename + " 'message'"
-    if len(args) > 1:
-        message_text = update.message.text
-        savename = args[0]
-        message_text = message_text.split(' ', 2)[2]
-        saved[chat_idstr][savename] = message_text
-        saves = "Saved " + savename
-    try:
-        saves
-    except NameError:
-        saves = "something went wrong"
-    bot.sendMessage(chat_id=update.message.chat_id,
-                    text=saves)
-    dumpjson("saved.json", saved)
+        if len(args) == 0:
+            saves = "Save a message with\n/save 'name' 'message'\nand retrieve it later with\n/get 'name'"
+        if len(args) == 1:
+            saves = "Save a message with\n/save 'name' 'message'\nand retrieve it later with\n/get 'name'"
+            savename = args[0]
+            if savename in saved[chat_idstr]:
+                saves = savename + ":\n" + str(saved[chat_idstr][savename])
+            else:
+                saves = "That name isn't saved yet! You can create it with\n/save " + savename + " 'message'"
+        if len(args) > 1:
+            message_text = update.message.text
+            savename = args[0]
+            message_text = message_text.split(' ', 2)[2]
+            saved[chat_idstr][savename] = message_text
+            saves = "Saved " + savename
+        try:
+            saves
+        except NameError:
+            saves = "something went wrong"
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text=saves)
+        dumpjson("saved.json", saved)
+    else:
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text="Only for mods bruh")
 
 def get_message(bot, update, args):
     global saved
