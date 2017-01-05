@@ -405,6 +405,13 @@ def receiveMessage(bot, update):
                     bot.sendMessage(chat_id=update.message.chat_id,
                                     text=extra + ":\n" + saved[chat_idstr][extra],
                                     parse_mode="HTML")
+                else:
+                    if extra in saved[chat_idstr]["from"].keys():
+                        messageid = saved[chat_idstr]["from"][extra]["replytoid"]
+                        fromchat = saved[chat_idstr]["from"][extra]["replytochat"]
+                        bot.forwardMessage(chat_id=chat_id,
+                                            from_chat_id=fromchat,
+                                            message_id=messageid)
 
 def receiveLocked(bot, update):
     idbase = loadjson('./idbase.json', "idbase.json")
@@ -1584,7 +1591,7 @@ def checknsfw(bot, update, args):
         moderated = loadjson('./moderated.json', "moderated.json")
         promoted = loadjson('./promoted.json', "promoted.json")
         if chat_idstr in moderated:
-            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
+            if fromid in get_admin_ids(bot, update.message.chat_id) or owner_check(bot, chat_id, fromid) == "true":
                 locked = loadjson('./locked.json', "locked.json")
                 if chat_idstr not in locked.keys():
                     locked[chat_idstr] = {}
@@ -1593,8 +1600,8 @@ def checknsfw(bot, update, args):
                     locked[chat_idstr]["flood"] = "no"
                     locked[chat_idstr]["arabic"] = "yes"
                     locked[chat_idstr]["NSFW"] = "off"
-                str_args = args[0]
-                if args[0]:
+                if args:
+                    str_args = args[0]
                     if args[0] == "on":
                         if locked[chat_idstr]["NSFW"] != "on":
                             locked[chat_idstr]["NSFW"] = "on"
