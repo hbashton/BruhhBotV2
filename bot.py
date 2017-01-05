@@ -9,6 +9,7 @@ import requests
 import subprocess
 import time
 import urllib
+from collections import defaultdict
 from datetime import datetime
 from functools import partial
 from json import JSONDecoder
@@ -59,17 +60,17 @@ modlist_help = "/modlist to see a list of moderators for this chat!\n"
 time_help = "\n/time <code>location</code>  to get the current time and date in that location\n"
 help_help = "\n/help to see this message\n--/help <code>command</code> to see information about that command :)"
 save_help = "\n/save <code>name</code> + <code>message</code> to save a message\n--Then, use #name to get the message you saved!\n"
+save_from_help = "\nUse /save + <code>from</code> + <code>name</code> and reply to a message to save that message! Then, use /get <code>name</code> to have me forward that message to you!\n "
 get_help = "/get <code>name</code> to retrieve a saved message\n"
 lock_help = "\n/lock <code>[sticker, gif, flood, arabic]</code> to lock group setings\n"
 unlock_help = "/unlock <code>[sticker, gif, flood, arabic]</code> to unlock group settings\n"
 setflood_help = "/setflood <code>int</code> to set the number before a user is kicked (must be between 5 and 10) \n"
 settings_help = "\n/settings to see the current group settings\n"
-get_help = "/get <code>name</code> to retrieve a saved message\n"
 gbanlist_help = "\n/gbanlist to get a list of users banned from all my chats\n"
 banlist_help = "\n/banlist to get a list of users banned from this chat\n"
 setrules_help = "\n/setrules <code>rules</code> to set the rules for this chat\n"
 rules_help = "/rules to get the rules for this chat\n"
-standardhelp = add_help + rem_help + promote_help + demote_help + modlist_help + kick_help + ban_help + unban_help + banall_help + unbanall_help + banlist_help + gbanlist_help + lock_help + unlock_help + setflood_help + settings_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + time_help + save_help + get_help + setrules_help + rules_help
+standardhelp = add_help + rem_help + promote_help + demote_help + modlist_help + kick_help + ban_help + unban_help + banall_help + unbanall_help + banlist_help + gbanlist_help + lock_help + unlock_help + setflood_help + settings_help + note_a_help + note_b_help + note_c_help + note_d_help + note_e_help + note_f_help + note_g_help + time_help + save_help + get_help + save_from_help + setrules_help + rules_help
 notmaster = "Sup <b>not</b> master. \n"
 master = "Sup" + myusername + "\n"
 # global functions
@@ -126,8 +127,10 @@ def dumpjson(filename, var):
 def owner_admin_mod_check(bot, chat_id, chat_idstr, user_id):
     promoted = loadjson('./promoted.json', "promoted.json")
     if chat_idstr in promoted:
-        if user_id in get_admin_ids(bot, chat_id) or (user_id in promoted[chat_idstr]) or user_id == int(config['ADMIN']['id']):
+        if user_id in get_admin_ids(bot, chat_id) or str(user_id) in promoted[chat_idstr] or user_id == int(config['ADMIN']['id']):
             return "true"
+        else:
+            return "false"
     else:
         if user_id in get_admin_ids(bot, chat_id) or user_id == int(config['ADMIN']['id']):
             return "true"
@@ -366,15 +369,6 @@ def receiveMessage(bot, update):
                 bot.kickChatMember(chat_id, tgid)
                 bot.sendMessage(chat_id=update.message.chat_id,
                                 text="@" + tguser + " ....I really don't like them. '_'")
-            if welcome[chat_idstr]["welcome"] == "yes":
-                if not welcome[chat_idstr]["message"]:
-                    bot.sendMessage(chat_id=update.message.chat_id,
-                                    reply_to_message_id=update.message.message_id,
-                                    text="Hi @" + tguser + "! Welcome to " + update.message.chat.title)
-                else:
-                    bot.sendMessage(chat_id=update.message.chat_id,
-                                    reply_to_message_id=update.message.message_id,
-                                    text="Hi @" + tguser + "! " + welcome[chat_idstr]["message"])
         dumpjson("idbase.json", idbase)
         dumpjson("banbase.json", banbase)
         dumpjson("promoted.json", promoted)
@@ -397,7 +391,6 @@ def receiveMessage(bot, update):
             dumpjson("locked.json", locked)
             dumpjson("flooding.json", flooding)
             dumpjson("welcome.json", welcome)
-
     receiveLocked(bot, update)
     floodcheck(bot, update)
     if update.message.text:
@@ -410,20 +403,20 @@ def receiveMessage(bot, update):
             if chat_idstr in saved.keys():
                 if extra in saved[chat_idstr].keys():
                     bot.sendMessage(chat_id=update.message.chat_id,
-                                            text=extra + ":\n" + saved[chat_idstr][extra])
+                                    text=extra + ":\n" + saved[chat_idstr][extra],
+                                    parse_mode="HTML")
 
 def receiveLocked(bot, update):
     idbase = loadjson('./idbase.json', "idbase.json")
     tguser = str(update.message.from_user.username).lower()
-
     if update.message.chat.type != "private":
         chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
-        if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "false":
+        if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "false":
             if bot.id in get_admin_ids(bot, update.message.chat_id):
                 if fromidstr not in idbase.keys():
                     idbase[fromidstr] = tguser
                 dumpjson("idbase.json", idbase)
-
+                locked = loadjson('./locked.json', "locked.json")
                 sentlock = loadjson('./sentlock.json', "sentlock.json")
                 idbase = loadjson('./idbase.json', "idbase.json")
                 if chat_idstr not in sentlock.keys():
@@ -540,7 +533,7 @@ def floodcheck(bot, update):
                         if count < limit:
                             flooding[chat_idstr]["floodcount"] += 1
                         else:
-                            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) != "true":
+                            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) != "true":
                                 promoted = loadjson('./promoted.json', "promoted.json")
                                 if chat_idstr in promoted.keys():
                                     if promoted[chat_idstr]:
@@ -680,7 +673,7 @@ def promoteme(bot, update, args):
             chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
             moderated = loadjson('./moderated.json', "moderated.json")
             if chat_idstr in moderated:
-                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+                if fromid in get_admin_ids(bot, update.message.chat_id) or owner_check(bot, chat_id, fromid) == "true":
                     global idbase
                     global promoted
                     promoted = loadjson('./promoted.json', "promoted.json")
@@ -749,7 +742,7 @@ def demoteme(bot, update, args):
             chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
             moderated = loadjson('./moderated.json', "moderated.json")
             if chat_idstr in moderated:
-                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+                if fromid in get_admin_ids(bot, update.message.chat_id) or owner_check(bot, chat_id, fromid) == "true":
                     global idbase
                     global promoted
 
@@ -809,7 +802,7 @@ def unbanme(bot, update, args):
             moderated = loadjson('./moderated.json', "moderated.json")
             if chat_idstr in moderated:
 
-                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                     global idbase
                     global banbase
 
@@ -881,7 +874,7 @@ def unbanall(bot, update, args):
                             bot.sendMessage(chat_id=update.message.chat_id,
                                             text="I don't know anyone by that name!")
                         if user_id:
-                            if owner_admin_mod_check(bot, chat_id, chat_idstr, user_id) != "true":
+                            if owner_admin_mod_check(bot, chat_id, chat_idstr, int(user_id)) != "true":
                                 unbanuser = str_args.replace("@", "")
                                 for string, chat in moderated.items():
                                     bot.unbanChatMember(chat, user_id)
@@ -937,7 +930,7 @@ def banall(bot, update, args):
                             bot.sendMessage(chat_id=update.message.chat_id,
                                             text="I don't know anyone by that name!")
                         if user_id:
-                            if owner_admin_mod_check(bot, chat_id, chat_idstr, user_id) != "true":
+                            if owner_admin_mod_check(bot, chat_id, chat_idstr, int(user_id)) != "true":
                                 banuser = str_args.replace("@", "")
                                 for string, chat in moderated.items():
                                     bot.kickChatMember(chat, user_id)
@@ -969,7 +962,7 @@ def banme(bot, update, args):
             chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
             moderated = loadjson('./moderated.json', "moderated.json")
             if chat_idstr in moderated:
-                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                     global idbase
                     global banbase
 
@@ -992,7 +985,7 @@ def banme(bot, update, args):
                         if chat_idstr not in banbase.keys():
                             banbase[chat_idstr] = []
                         if user_id:
-                            if owner_admin_mod_check(bot, chat_id, chat_idstr, user_id) != "true":
+                            if owner_admin_mod_check(bot, chat_id, chat_idstr, int(user_id)) != "true":
                                 banuser = str_args.replace("@", "")
                                 bot.kickChatMember(chat_id, user_id)
                                 banbase[chat_idstr] = banbase[chat_idstr] + [user_id]
@@ -1022,7 +1015,7 @@ def kick_user(bot, update, args):
         chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
         moderated = loadjson('./moderated.json', "moderated.json")
         if chat_idstr in moderated:
-            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                 global idbase
                 idbase = loadjson('./idbase.json', "idbase.json")
                 str_args = ' '.join(args)
@@ -1038,7 +1031,7 @@ def kick_user(bot, update, args):
                         bot.sendMessage(chat_id=update.message.chat_id,
                                         text="I don't know anyone by that name!")
                     if user_id:
-                        if owner_admin_mod_check(bot, chat_id, chat_idstr, user_id) != "true":
+                        if owner_admin_mod_check(bot, chat_id, chat_idstr, int(user_id)) != "true":
                             banuser = str_args.replace("@", "")
                             bot.kickChatMember(chat_id, user_id)
                             bot.sendMessage(chat_id=update.message.chat_id,
@@ -1111,7 +1104,7 @@ def note(bot, update, args):
         if notename in commands:
             if notename == "clearall":
                 if update.message.chat.type != "private":
-                    if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+                    if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                         saveme = notes[chat_idstr]["admin"]
                         del notes[chat_idstr]
                         notes[chat_idstr] = {}
@@ -1127,7 +1120,7 @@ def note(bot, update, args):
 
             if notename == "clearlock":
                 if update.message.chat.type != "private":
-                    if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+                    if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                         del notes[chat_idstr]["admin"]
                         note = "Locked notes cleared for this chat"
                     else:
@@ -1162,7 +1155,7 @@ def note(bot, update, args):
                     if notename in commands:
                         note = "Notes cannot be command names."
                     else:
-                        if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+                        if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                             if notename in notes[chat_idstr]["admin"]:
                                 del notes[chat_idstr]["admin"][notename]
                                 note = "Cleared the note " + notename
@@ -1192,7 +1185,7 @@ def note(bot, update, args):
                     if notename in commands:
                         note = "Notes cannot be command names."
                     else:
-                        if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+                        if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                             lockednote = args[0]
                             del args[0]
                             str_args = ' '.join(args)
@@ -1219,7 +1212,7 @@ def note(bot, update, args):
                     if notename in commands:
                         note = "Notes cannot be command names."
                     else:
-                        if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+                        if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                             lockednote = args[0]
                             del args[0]
                             if lockednote in notes[chat_idstr]:
@@ -1242,7 +1235,7 @@ def note(bot, update, args):
                     note = "Notes can't be command names"
         else:
             if notename in notes[chat_idstr]["admin"]:
-                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                     notes[chat_idstr]["admin"][notename] = notes[chat_idstr]["admin"][notename] = notes[chat_idstr]["admin"][notename] + "\n" + str_args
                     note = str_args + " added to note " + notename
                 else:
@@ -1294,14 +1287,13 @@ def save_message(bot, update, args):
     global saved
     saved = loadjson('./saved.json', "saved.json")
     chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
-    if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+    if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
         try:
             saved
         except NameError:
             saved = {}
         if chat_idstr not in saved.keys():
             saved[chat_idstr] = {}
-
         if len(args) == 0:
             saves = "Save a message with\n/save <code>name</code> + <code>message</code>\nand retrieve it later with\n/get <code>name</code>"
         if len(args) == 1:
@@ -1312,11 +1304,32 @@ def save_message(bot, update, args):
             else:
                 saves = "That name isn't saved yet! You can create it with\n/save <code>" + savename + "</code> + <code>message</code>"
         if len(args) > 1:
-            message_text = update.message.text
-            savename = args[0]
-            message_text = message_text.split(' ', 2)[2]
-            saved[chat_idstr][savename] = message_text
-            saves = "Saved " + savename
+            if args[0] == "from":
+                if update.message.reply_to_message:
+                    savename = str(args[1])
+                    if savename in saved[chat_idstr].keys():
+                        del saved[chat_idstr][savename]
+                    replyto = update.message.reply_to_message
+                    replytoid = replyto.message_id
+                    replytochat = replyto.chat_id
+                    try:
+                        saved[chat_idstr]["from"]
+                    except KeyError:
+                        saved[chat_idstr]["from"] = {}
+                    saved[chat_idstr]["from"][savename] = {}
+                    saved[chat_idstr]["from"][savename]["replytoid"] = replytoid
+                    saved[chat_idstr]["from"][savename]["replytochat"] = replytochat
+                    saves = "Successfully saved message."
+                else:
+                    saves = "Use /save + <code>from</code> + <code>name</code> when replying to a message to save that message, whether it be a file or text, in my database.\nThen, use /get <code>name</code> or #name to see it again"
+            else:
+                message_text = update.message.text
+                savename = args[0]
+                if savename in saved[chat_idstr]["from"]:
+                    del saved[chat_idstr]["from"][savename]
+                message_text = message_text.split(' ', 2)[2]
+                saved[chat_idstr][savename] = message_text
+                saves = "Saved " + savename
         try:
             saves
         except NameError:
@@ -1339,20 +1352,28 @@ def get_message(bot, update, args):
         getme = "Get a saved message with\n/get <code>name</code>"
     if len(args) == 1:
         savename = args[0]
-        if savename in saved[chat_idstr]:
-            getme = savename + ":\n" + str(saved[chat_idstr][savename])
+        if savename in saved[chat_idstr]["from"]:
+            messageid = saved[chat_idstr]["from"][savename]["replytoid"]
+            fromchat = saved[chat_idstr]["from"][savename]["replytochat"]
+            bot.forwardMessage(chat_id=chat_id,
+                                from_chat_id=fromchat,
+                                message_id=messageid)
+            getme = ""
         else:
-            getme = "That name isn't saved yet! You can create it with\n/save <code>" + savename + "</code> + <code>message</code>"
+            if savename in saved[chat_idstr]:
+                getme = savename + ":\n" + str(saved[chat_idstr][savename])
+            else:
+                getme = "That name isn't saved yet! You can create it with\n/save <code>" + savename + "</code> + <code>message</code>"
     if len(args) > 1:
         getme = "Only try to retrieve one saved message at a time!\nGet a saved message with\n/get <code>name</code>"
-
     try:
         getme
     except NameError:
         getme = "something went wrong"
-    bot.sendMessage(chat_id=update.message.chat_id,
-                    text=getme,
-                    parse_mode="HTML")
+    if getme:
+        bot.sendMessage(chat_id=update.message.chat_id,
+                        text=getme,
+                        parse_mode="HTML")
 
 def lockme(bot, update, args):
     if update.message.chat.type != "private":
@@ -1363,7 +1384,7 @@ def lockme(bot, update, args):
             chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
             moderated = loadjson('./moderated.json', "moderated.json")
             if chat_idstr in moderated:
-                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                     locked = loadjson('./locked.json', "locked.json")
                     if chat_idstr not in locked.keys():
                         locked[chat_idstr] = {}
@@ -1405,7 +1426,7 @@ def lockme(bot, update, args):
                     if lockedmsg:
                         bot.sendMessage(chat_id=update.message.chat_id,
                                         text=lockedmsg,
-                                        parse_mode="HMTL")
+                                        parse_mode="HTML")
                     else:
                         bot.sendMessage(chat_id=update.message.chat_id,
                                         text="Something went wrong.")
@@ -1432,7 +1453,7 @@ def fixlocked(bot, update):
             chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
             moderated = loadjson('./moderated.json', "moderated.json")
             if chat_idstr in moderated:
-                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                     locked = loadjson('./locked.json', "locked.json")
                     if chat_idstr not in locked.keys():
                         locked[chat_idstr] = {}
@@ -1456,7 +1477,7 @@ def unlockme(bot, update, args):
             chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
             moderated = loadjson('./moderated.json', "moderated.json")
             if chat_idstr in moderated:
-                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                     global locked
                     lockedmsg = ""
                     locked = loadjson('./locked.json', "locked.json")
@@ -1528,7 +1549,7 @@ def setflood(bot, update, args):
 
             if chat_idstr in moderated:
 
-                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                     flooding = loadjson('./flooding.json', "flooding.json")
                     intarg = int(args[0])
                     if isinstance(intarg, int):
@@ -1563,7 +1584,7 @@ def checknsfw(bot, update, args):
         moderated = loadjson('./moderated.json', "moderated.json")
         promoted = loadjson('./promoted.json', "promoted.json")
         if chat_idstr in moderated:
-            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                 locked = loadjson('./locked.json', "locked.json")
                 if chat_idstr not in locked.keys():
                     locked[chat_idstr] = {}
@@ -1641,7 +1662,7 @@ def resetwarn(bot, update, args):
         if bot.id in get_admin_ids(bot, update.message.chat_id):
             chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
             if chat_idstr in moderated:
-                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+                if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                     str_args = ' '.join(args)
                     if "@" in str_args:
                         unwarn = str_args.replace("@", "").lower()
@@ -1747,6 +1768,9 @@ def settings(bot, update):
     if chat_idstr not in locked.keys():
         fixlocked(bot, update)
         time.sleep(1)
+    if "NSFW" not in locked[chat_idstr].keys():
+        locked[chat_idstr]["NSFW"] = "off"
+        dumpjson("locked.json", locked)
     if chat_idstr in moderated:
         locked = loadjson('./locked.json', "locked.json")
         flooding = loadjson('./flooding.json', "flooding.json")
@@ -1794,7 +1818,7 @@ def welcomeme(bot, update, args):
     if update.message.chat.type != "private":
         if bot.id in get_admin_ids(bot, update.message.chat_id):
             chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
-            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromidstr) == "true":
+            if owner_admin_mod_check(bot, chat_id, chat_idstr, fromid) == "true":
                 if chat_idstr in moderated:
                     if chat_idstr not in welcome.keys():
                         welcome[chat_idstr] = {}
@@ -1967,8 +1991,6 @@ dispatcher.add_handler(welcome_handler)
 
 
 dispatcher.add_handler(MessageHandler([Filters.all], receiveMessage))
-dispatcher.add_handler(MessageHandler([Filters.all], receiveLocked))
-dispatcher.add_handler(MessageHandler([Filters.all], floodcheck))
 dispatcher.add_handler(CallbackQueryHandler(button))
 dispatcher.add_error_handler(error)
 
