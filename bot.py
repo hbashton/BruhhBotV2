@@ -180,7 +180,8 @@ def start(bot, update):
         helpall = standardhelp + help_help
 
         bot.sendMessage(chat_id=update.message.chat_id,
-                            text=helpall)
+                            text=helpall,
+                            parse_mode="HTML")
 
 def help_message(bot, update, args):
     standardlist = ["save", "get", "time", "ban", "unban", "kick", "note", "banall", "unbanall", "add", "rem", "promote", "demote", "modlist", "lock", "unlock", "setflood", "settings", "setrules", "rules", "gbanlist", "banlist"]
@@ -263,11 +264,13 @@ def add(bot, update):
                     moderated[chat_idstr] = chat_id
                     bot.sendMessage(chat_id=update.message.chat_id,
                                     text=update.message.chat.title + " added to my records!")
+                    return
                 else:
                     bot.sendMessage(chat_id=update.message.chat_id,
                                     text=update.message.chat.title + " is already in my records")
                 with open("moderated.json", 'w') as f:
                     json.dump(moderated, f)
+                    return
             else:
                 bot.sendMessage(chat_id=update.message.chat_id,
                                 text="I need to be an admin to moderate groups!")
@@ -406,6 +409,9 @@ def receiveMessage(bot, update):
                                     text=extra + ":\n" + saved[chat_idstr][extra],
                                     parse_mode="HTML")
                 else:
+                    if "from" not in saved[chat_idstr].keys():
+                        saved[chat_idstr]["from"] = {}
+                        dumpjson("saved.json", saved)
                     if extra in saved[chat_idstr]["from"].keys():
                         messageid = saved[chat_idstr]["from"][extra]["replytoid"]
                         fromchat = saved[chat_idstr]["from"][extra]["replytochat"]
@@ -470,6 +476,7 @@ def receiveLocked(bot, update):
                         else:
                             if sentlock[chat_idstr][fromidstr] == 1:
                                 bot.sendMessage(chat_id=update.message.chat_id,
+                                            reply_to_message_id=update.message.message_id,
                                             text="This type of media is not allowed here. <code>2/3</code>",
                                             parse_mode="HTML")
                                 sentlock[chat_idstr][fromidstr] = 2
@@ -883,12 +890,12 @@ def unbanall(bot, update, args):
                         if user_id:
                             if owner_admin_mod_check(bot, chat_id, chat_idstr, int(user_id)) != "true":
                                 unbanuser = str_args.replace("@", "")
-                                for string, chat in moderated.items():
-                                    bot.unbanChatMember(chat, user_id)
                                 if user_id in banbase["global"]:
                                     banbase["global"].remove(user_id)
                                     bot.sendMessage(chat_id=update.message.chat_id,
                                                     text="User @" + unbanuser + " globally unbanned from all my chats!")
+                                    for string, chat in moderated.items():
+                                        bot.unbanChatMember(chat, user_id)
                                 else:
                                     bot.sendMessage(chat_id=update.message.chat_id,
                                                     text="User @" + unbanuser + " is not globally banned!")
@@ -939,11 +946,11 @@ def banall(bot, update, args):
                         if user_id:
                             if owner_admin_mod_check(bot, chat_id, chat_idstr, int(user_id)) != "true":
                                 banuser = str_args.replace("@", "")
-                                for string, chat in moderated.items():
-                                    bot.kickChatMember(chat, user_id)
                                 banbase["global"] = banbase["global"] + [user_id]
                                 bot.sendMessage(chat_id=update.message.chat_id,
                                                 text="User @" + banuser + " globally banned from all my chats!")
+                                for string, chat in moderated.items():
+                                    bot.kickChatMember(chat, user_id)
                             else:
                                 bot.sendMessage(chat_id=update.message.chat_id,
                                                 text="You can't gban mods! &$%^# ")
@@ -1332,8 +1339,11 @@ def save_message(bot, update, args):
             else:
                 message_text = update.message.text
                 savename = args[0]
-                if savename in saved[chat_idstr]["from"]:
-                    del saved[chat_idstr]["from"][savename]
+                try:
+                    if savename in saved[chat_idstr]["from"].keys():
+                        del saved[chat_idstr]["from"][savename]
+                except KeyError:
+                     saved[chat_idstr]["from"] = {}
                 message_text = message_text.split(' ', 2)[2]
                 saved[chat_idstr][savename] = message_text
                 saves = "Saved " + savename
@@ -1724,7 +1734,8 @@ def rules_get(bot, update):
                 else:
                     msg = "I don't have any rules for " + update.message.chat.title + "!\nMaybe you need to set them with /setrules"
                 bot.sendMessage(chat_id=update.message.chat_id,
-                                text=msg)
+                                text=msg,
+                                parse_mode="HTML")
 
             else:
                 bot.sendMessage(chat_id=update.message.chat_id,
