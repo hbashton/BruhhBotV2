@@ -308,6 +308,40 @@ def rem(bot, update):
         bot.sendMessage(chat_id=update.message.chat_id,
                         text="I only work with groups! Sorry pal")
 
+def leavecheck(bot, update):
+    global promoted
+    global moderated
+    global banbase
+    global promoted
+    global locked
+    global welcome
+    moderated = loadjson('./moderated.json', "moderated.json")
+
+    banbase = loadjson('./banbase.json', "banbase.json")
+
+    promoted = loadjson('./promoted.json', "promoted.json")
+
+    locked = loadjson('./locked.json', "locked.json")
+
+    welcome = loadjson('./welcome.json', "welcome.json")
+
+    flooding = loadjson('./flooding.json', "flooding.json")
+    chat_idstr, chat_id, fromid, fromidstr = common_vars(bot, update)
+    if update.message.chat.type != "private":
+        if update.message.left_chat_member:
+            tgid = update.message.left_chat_member["id"]
+            if bot.id == tgid:
+                del moderated[chat_idstr]
+                del banbase[chat_idstr]
+                del promoted[chat_idstr]
+                del locked[chat_idstr]
+                del welcome[chat_idstr]
+                dumpjson("banbase.json", banbase)
+                dumpjson("promoted.json", promoted)
+                dumpjson("locked.json", locked)
+                dumpjson("flooding.json", flooding)
+                dumpjson("welcome.json", welcome)
+
 def receiveMessage(bot, update):
     global idbase
     global moderated
@@ -2007,8 +2041,8 @@ dispatcher.add_handler(gbanlist_handler)
 dispatcher.add_handler(resetwarn_handler)
 dispatcher.add_handler(welcome_handler)
 
-
 dispatcher.add_handler(MessageHandler([Filters.all], receiveMessage))
+dispatcher.add_handler(MessageHandler([Filters.status_update], leavecheck))
 dispatcher.add_handler(CallbackQueryHandler(button))
 dispatcher.add_error_handler(error)
 
