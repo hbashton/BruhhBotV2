@@ -175,7 +175,7 @@ def start(bot, update):
         bot.sendChatAction(chat_id=update.message.chat_id,
                            action=ChatAction.TYPING)
         bot.sendMessage(chat_id=update.message.chat_id,
-                        text="Hi. I'm BruhhBot! You can use me to do lots of cool stuff")
+                        text="Hi. I'm XManager! You can use me to do lots of cool stuff")
 
         helpall = standardhelp + help_help
 
