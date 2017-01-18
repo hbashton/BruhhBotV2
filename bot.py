@@ -17,6 +17,7 @@ from langdetect import detect
 from pytz import timezone
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, InlineQueryHandler, CallbackQueryHandler
 from telegram import InlineQueryResultArticle, ChatAction, InputTextMessageContent, InlineKeyboardButton, InlineKeyboardMarkup, Chat, User, Message, Update, ChatMember, UserProfilePhotos, File, ReplyMarkup, TelegramObject
+from threading import Thread
 from urllib.request import urlopen, urlretrieve
 from urllib.parse import quote_plus, urlencode
 from uuid import uuid4
@@ -341,6 +342,19 @@ def leavecheck(bot, update):
                 dumpjson("locked.json", locked)
                 dumpjson("flooding.json", flooding)
                 dumpjson("welcome.json", welcome)
+
+
+class notsofast(Thread):
+    
+    def __init__(self, bot, update):
+        self.bot = bot
+        self.update = update
+        Thread.__init__(self)
+    def run(self):
+        time.sleep(1.5)
+        update = self.update
+        bot = self.bot
+        update.message.reply_text("not so fast...")
 
 def receiveMessage(bot, update):
     global idbase
@@ -1933,7 +1947,7 @@ def idme(bot, update, args):
                                 text="The ID of " + update.message.chat.title + " is " + chat_idstr)
 
 def runbruhh(bot, update):
-    update.message.reply_text("not so fast...")
+    notsofast(bot, update).start()
 
 def button(bot, update, direct=True):
         global welcome
